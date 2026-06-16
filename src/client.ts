@@ -5,10 +5,15 @@ import type {
   QueuedLog,
   CaptureOptions,
   RequestContext,
+  ConsoleCaptureOptions,
+  WorkerFetchHandler,
 } from "./types";
 import { LogBatch } from "./batch";
 import { shouldLog } from "./levels";
-import { serializeError } from "./errors";
+import { serializeError, getErrorFingerprint } from "./errors";
+import { installConsoleHooks } from "./console";
+import { createWorkerFetchHandler, wrapWorker } from "./workers";
+import { DedupTracker } from "./dedup";
 
 /**
  * FlareLog logging client.
@@ -40,6 +45,9 @@ import { serializeError } from "./errors";
 export class FlareLog {
   private config: Required<FlareLogConfig>;
   private batch: LogBatch;
+  private dedup: DedupTracker;
+  private consoleCleanup?: () => void;
+  private globalCleanup?: () => void;
 
   constructor(config: FlareLogConfig) {
     if (!config.apiKey) {
@@ -59,7 +67,15 @@ export class FlareLog {
       includeTimestamps: config.includeTimestamps ?? true,
       apiKey: config.apiKey,
       project: config.project,
+      autoCapture: config.autoCapture ?? {},
     };
+
+    this.dedup = new DedupTracker({
+      windowMs:
+        typeof this.config.autoCapture.dedupWindowMs === "number"
+          ? this.config.autoCapture.dedupWindowMs
+          : 5000,
+    });
 
     this.batch = new LogBatch(
       {
@@ -71,42 +87,47 @@ export class FlareLog {
       this.config.apiKey,
       this.config.project
     );
+
+    if (this.config.autoCapture.console) {
+      const opts =
+        typeof this.config.autoCapture.console === "object"
+          ? this.config.autoCapture.console
+          : undefined;
+      this.consoleCleanup = this.installConsoleHooks(opts);
+    }
+
+    if (this.config.autoCapture.globalErrors || this.config.autoCapture.rejections) {
+      this.globalCleanup = this.installGlobalHandlers({
+        errors: this.config.autoCapture.globalErrors,
+        rejections: this.config.autoCapture.rejections,
+      });
+    }
   }
 
-  /** Log at TRACE level */
   trace(message: string, metadata?: Record<string, unknown>): void {
     this.log("TRACE", message, metadata);
   }
 
-  /** Log at DEBUG level */
   debug(message: string, metadata?: Record<string, unknown>): void {
     this.log("DEBUG", message, metadata);
   }
 
-  /** Log at INFO level */
   info(message: string, metadata?: Record<string, unknown>): void {
     this.log("INFO", message, metadata);
   }
 
-  /** Log at WARN level */
   warn(message: string, metadata?: Record<string, unknown>): void {
     this.log("WARN", message, metadata);
   }
 
-  /** Log at ERROR level */
   error(message: string, metadata?: Record<string, unknown>): void {
     this.log("ERROR", message, metadata);
   }
 
-  /** Log at FATAL level */
   fatal(message: string, metadata?: Record<string, unknown>): void {
     this.log("FATAL", message, metadata);
   }
 
-  /**
-   * Log with a specific level.
-   * This is the core logging method that all level-specific methods delegate to.
-   */
   log(
     level: LogLevel,
     message: string,
@@ -130,9 +151,6 @@ export class FlareLog {
     this.batch.add(entry);
   }
 
-  /**
-   * Log a raw entry directly. Useful for advanced use cases.
-   */
   logRaw(entry: LogEntry): void {
     if (!shouldLog(entry.level, this.config.level)) {
       return;
@@ -146,15 +164,11 @@ export class FlareLog {
     this.batch.add(queued);
   }
 
-  /**
-   * Log an Error object with full serialization (including cause chain).
-   * This is the recommended way to log exceptions.
-   */
   logError(
     err: unknown,
     opts?: {
       message?: string;
-      level?: "WARN" | "ERROR" | "FATAL";
+      level?: LogLevel;
       source?: string;
       metadata?: Record<string, unknown>;
       traceId?: string;
@@ -163,9 +177,7 @@ export class FlareLog {
     const level = opts?.level ?? "ERROR";
     const errorData = serializeError(err);
     const message =
-      opts?.message ??
-      (errorData.message as string) ??
-      "An error occurred";
+      opts?.message ?? (errorData.message as string) ?? "An error occurred";
 
     this.log(level, message, {
       ...opts?.metadata,
@@ -176,18 +188,6 @@ export class FlareLog {
     });
   }
 
-  /**
-   * Wrap an async function. If it throws, the error is auto-logged with
-   * full context and then re-thrown (unless rethrow: false).
-   *
-   * @example
-   * ```ts
-   * const user = await logger.capture(
-   *   () => fetchUser(id),
-   *   { source: "user-service", label: "fetchUser", metadata: { userId: id } }
-   * );
-   * ```
-   */
   async capture<T>(
     fn: () => Promise<T> | T,
     opts?: CaptureOptions
@@ -207,22 +207,10 @@ export class FlareLog {
         throw err;
       }
 
-      // Return undefined when not rethrowing — caller must handle
       return undefined as T;
     }
   }
 
-  /**
-   * Wrap a synchronous function. If it throws, the error is auto-logged.
-   *
-   * @example
-   * ```ts
-   * const config = logger.captureSync(
-   *   () => JSON.parse(raw),
-   *   { source: "config-parser", label: "parseConfig" }
-   * );
-   * ```
-   */
   captureSync<T>(fn: () => T, opts?: CaptureOptions): T {
     try {
       return fn();
@@ -243,25 +231,6 @@ export class FlareLog {
     }
   }
 
-  /**
-   * Wrap a Cloudflare Worker request handler.
-   * Auto-captures request context and any unhandled errors.
-   *
-   * @example
-   * ```ts
-   * export default {
-   *   async fetch(request, env, ctx) {
-   *     return logger.withRequest(
-   *       { request, traceId: crypto.randomUUID() },
-   *       ctx,
-   *       async () => {
-   *         return new Response("Hello!");
-   *       }
-   *     );
-   *   }
-   * }
-   * ```
-   */
   async withRequest<T>(
     ctx: RequestContext,
     executionCtx: { waitUntil: (promise: Promise<unknown>) => void },
@@ -270,7 +239,6 @@ export class FlareLog {
     const req = ctx.request;
     const url = new URL(req.url);
 
-    // Create a request-scoped child logger
     const child = this.child({
       source: "request",
       traceId: ctx.traceId,
@@ -289,7 +257,6 @@ export class FlareLog {
       const duration = Date.now() - startTime;
       child.info("Request completed", { durationMs: duration });
 
-      // Ensure logs are flushed
       executionCtx.waitUntil(this.flush());
 
       return result;
@@ -306,84 +273,115 @@ export class FlareLog {
   }
 
   /**
+   * Wrap a function as a Cloudflare Worker fetch handler.
+   * Automatically captures request context, unhandled errors, and flushes logs.
+   */
+  workerFetch<T = Response>(
+    handler: WorkerFetchHandler<T>
+  ): WorkerFetchHandler<T> {
+    return createWorkerFetchHandler(this, handler);
+  }
+
+  /**
+   * Wrap a Web Worker constructor so worker errors are captured automatically.
+   */
+  wrapWorker(WorkerCtor: typeof Worker): typeof Worker {
+    return wrapWorker(this, WorkerCtor);
+  }
+
+  /**
+   * Install hooks on global console methods to capture errors and warnings.
+   * Returns a cleanup function.
+   */
+  installConsoleHooks(opts?: ConsoleCaptureOptions): () => void {
+    const cleanup = installConsoleHooks(this, {
+      ...opts,
+      dedupWindowMs:
+        typeof this.config.autoCapture.dedupWindowMs === "number"
+          ? this.config.autoCapture.dedupWindowMs
+          : 5000,
+    });
+
+    this.consoleCleanup = cleanup;
+    return cleanup;
+  }
+
+  /**
    * Install global error handlers to capture unhandled exceptions
    * and unhandled promise rejections.
    *
    * Works in browsers, Node.js, and Cloudflare Workers.
    * Returns a cleanup function to remove the handlers.
-   *
-   * @example
-   * ```ts
-   * // In your worker entry point
-   * logger.installGlobalHandlers();
-   * ```
    */
-  installGlobalHandlers(): () => void {
+  installGlobalHandlers(opts?: { errors?: boolean; rejections?: boolean }): () => void {
+    const captureErrors = opts?.errors ?? true;
+    const captureRejections = opts?.rejections ?? true;
     const handlers: Array<() => void> = [];
 
-    // Error events (runtime exceptions)
-    const onError = (event: ErrorEvent) => {
-      this.logError(event.error, {
-        message: "Unhandled error",
-        source: "global",
-      });
-    };
+    if (captureErrors) {
+      const onError = (event: ErrorEvent) => {
+        this.captureAutomatic(event.error, "global", "Unhandled error");
+      };
 
-    // Unhandled promise rejections
-    const onRejection = (event: PromiseRejectionEvent) => {
-      this.logError(event.reason, {
-        message: "Unhandled promise rejection",
-        source: "global",
-      });
-    };
+      try {
+        globalThis.addEventListener("error", onError as EventListener);
+        handlers.push(() => {
+          globalThis.removeEventListener("error", onError as EventListener);
+        });
+      } catch {
+        // Environment doesn't support addEventListener
+      }
+    }
 
-    // Try-catch for environments that support these events
-    try {
-      globalThis.addEventListener("error", onError as EventListener);
-      globalThis.addEventListener(
-        "unhandledrejection",
-        onRejection as EventListener
-      );
-      handlers.push(() => {
-        globalThis.removeEventListener("error", onError as EventListener);
-        globalThis.removeEventListener(
+    if (captureRejections) {
+      const onRejection = (event: PromiseRejectionEvent) => {
+        this.captureAutomatic(event.reason, "global", "Unhandled promise rejection");
+      };
+
+      try {
+        globalThis.addEventListener(
           "unhandledrejection",
           onRejection as EventListener
         );
-      });
-    } catch {
-      // Environment doesn't support addEventListener
+        handlers.push(() => {
+          globalThis.removeEventListener(
+            "unhandledrejection",
+            onRejection as EventListener
+          );
+        });
+      } catch {
+        // Environment doesn't support addEventListener
+      }
     }
 
-    // Node.js specific: uncaughtException and unhandledRejection
     try {
       const process = (globalThis as unknown as Record<string, unknown>).process as Record<string, unknown> | undefined;
       if (process && typeof process.on === "function") {
-        const nodeOnError = (err: Error) => {
-          this.logError(err, {
-            message: "Uncaught exception",
-            source: "global",
+        if (captureErrors) {
+          const nodeOnError = (err: Error) => {
+            this.captureAutomatic(err, "global", "Uncaught exception");
+          };
+          process.on("uncaughtException", nodeOnError);
+          handlers.push(() => {
+            (process.off as (...args: unknown[]) => void)("uncaughtException", nodeOnError);
           });
-        };
-        const nodeOnRejection = (reason: unknown) => {
-          this.logError(reason, {
-            message: "Unhandled promise rejection",
-            source: "global",
+        }
+
+        if (captureRejections) {
+          const nodeOnRejection = (reason: unknown) => {
+            this.captureAutomatic(reason, "global", "Unhandled promise rejection");
+          };
+          process.on("unhandledRejection", nodeOnRejection);
+          handlers.push(() => {
+            (process.off as (...args: unknown[]) => void)("unhandledRejection", nodeOnRejection);
           });
-        };
-        process.on("uncaughtException", nodeOnError);
-        process.on("unhandledRejection", nodeOnRejection);
-        handlers.push(() => {
-          (process.off as (...args: unknown[]) => void)("uncaughtException", nodeOnError);
-          (process.off as (...args: unknown[]) => void)("unhandledRejection", nodeOnRejection);
-        });
+        }
       }
     } catch {
       // Not in Node.js
     }
 
-    // Return cleanup function
-    return () => {
+    const cleanup = () => {
       for (const cleanup of handlers) {
         try {
           cleanup();
@@ -392,6 +390,9 @@ export class FlareLog {
         }
       }
     };
+
+    this.globalCleanup = cleanup;
+    return cleanup;
   }
 
   /**
@@ -417,13 +418,31 @@ export class FlareLog {
    */
   destroy(): void {
     this.batch.destroy();
+    this.consoleCleanup?.();
+    this.globalCleanup?.();
+    this.consoleCleanup = undefined;
+    this.globalCleanup = undefined;
+  }
+
+  private captureAutomatic(
+    err: unknown,
+    source: string,
+    message: string,
+    level?: LogLevel
+  ): void {
+    const key = `${source}:${message}:${getErrorFingerprint(err)}`;
+    if (this.dedup.isDuplicate(key)) {
+      return;
+    }
+
+    this.logError(err, {
+      message,
+      level: level ?? "ERROR",
+      source,
+    });
   }
 }
 
-/**
- * A child logger that carries default metadata.
- * Created via `logger.child({ ... })`.
- */
 export class FlareLogChild {
   private parent: FlareLog;
   private defaults: Record<string, unknown>;
@@ -462,7 +481,7 @@ export class FlareLogChild {
     level: LogLevel,
     message: string,
     metadata?: Record<string, unknown>,
-    opts?: { traceId?: string; spanId?: string }
+    opts?: { source?: string; traceId?: string; spanId?: string }
   ): void {
     this.parent.log(level, message, { ...this.defaults, ...metadata }, {
       source: this.defaultSource,
@@ -471,14 +490,11 @@ export class FlareLogChild {
     });
   }
 
-  /**
-   * Log an Error with full serialization.
-   */
   logError(
     err: unknown,
     opts?: {
       message?: string;
-      level?: "WARN" | "ERROR" | "FATAL";
+      level?: LogLevel;
       source?: string;
       metadata?: Record<string, unknown>;
       traceId?: string;
@@ -491,9 +507,6 @@ export class FlareLogChild {
     });
   }
 
-  /**
-   * Wrap an async function with this child's default metadata.
-   */
   async capture<T>(
     fn: () => Promise<T> | T,
     opts?: CaptureOptions
@@ -505,9 +518,6 @@ export class FlareLogChild {
     });
   }
 
-  /**
-   * Wrap a sync function with this child's default metadata.
-   */
   captureSync<T>(fn: () => T, opts?: CaptureOptions): T {
     return this.parent.captureSync(fn, {
       ...opts,

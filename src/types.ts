@@ -4,6 +4,11 @@
 export type LogLevel = "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
 
 /**
+ * Console levels that can be intercepted by hooks
+ */
+export type ConsoleLevel = "log" | "info" | "warn" | "error" | "debug" | "trace";
+
+/**
  * A single log entry
  */
 export interface LogEntry {
@@ -45,6 +50,38 @@ export interface FlareLogConfig {
   defaultSource?: string;
   /** Whether to include timestamps automatically. Defaults to true */
   includeTimestamps?: boolean;
+  /** Automatic error capture configuration */
+  autoCapture?: AutoCaptureConfig;
+}
+
+/**
+ * Automatic error capture configuration
+ */
+export interface AutoCaptureConfig {
+  /** Capture console.error / console.warn (and optionally more) */
+  console?: boolean | ConsoleCaptureOptions;
+  /** Capture global/runtime error events */
+  globalErrors?: boolean;
+  /** Capture unhandled promise rejections */
+  rejections?: boolean;
+  /** Enable worker fetch handler wrapper helpers */
+  fetchHandler?: boolean;
+  /** Enable Web Worker wrapper helpers */
+  worker?: boolean;
+  /** Deduplication window in milliseconds. Defaults to 5000 */
+  dedupWindowMs?: number;
+}
+
+/**
+ * Options for console hook capture
+ */
+export interface ConsoleCaptureOptions {
+  /** Console methods to intercept. Defaults to ["error", "warn"] */
+  levels?: ConsoleLevel[];
+  /** Source tag for captured console logs. Defaults to "console" */
+  source?: string;
+  /** Include original console arguments in metadata. Defaults to true */
+  includeArgs?: boolean;
 }
 
 /**
@@ -70,6 +107,53 @@ export interface CaptureOptions {
   /** A descriptive label for what operation was being attempted */
   label?: string;
 }
+
+/**
+ * Logger interface used by internal capture modules.
+ */
+export interface FlareLogLike {
+  trace(message: string, metadata?: Record<string, unknown>): void;
+  debug(message: string, metadata?: Record<string, unknown>): void;
+  info(message: string, metadata?: Record<string, unknown>): void;
+  warn(message: string, metadata?: Record<string, unknown>): void;
+  error(message: string, metadata?: Record<string, unknown>): void;
+  fatal(message: string, metadata?: Record<string, unknown>): void;
+  log(
+    level: LogLevel,
+    message: string,
+    metadata?: Record<string, unknown>,
+    opts?: { source?: string; traceId?: string; spanId?: string }
+  ): void;
+  logError(
+    err: unknown,
+    opts?: {
+      message?: string;
+      level?: LogLevel;
+      source?: string;
+      metadata?: Record<string, unknown>;
+      traceId?: string;
+    }
+  ): void;
+  flush(): Promise<void>;
+  child(defaults: Record<string, unknown> & { source?: string }): FlareLogLike;
+}
+
+/**
+ * Execution context shape used by Cloudflare Workers and similar runtimes
+ */
+export interface ExecutionContextLike {
+  waitUntil(promise: Promise<unknown>): void;
+  passThroughOnException?(): void;
+}
+
+/**
+ * Cloudflare Worker fetch handler signature
+ */
+export type WorkerFetchHandler<T = Response> = (
+  request: Request,
+  env: unknown,
+  ctx: ExecutionContextLike
+) => Promise<T>;
 
 /**
  * Options for request-scoped logging (Cloudflare Workers)

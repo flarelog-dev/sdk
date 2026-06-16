@@ -1,4 +1,5 @@
 import type { QueuedLog, FlareLogConfig, IngestResult } from "./types";
+import { runWithHookSkipped } from "./console";
 
 interface BatchConfig {
   batchSize: number;
@@ -73,7 +74,9 @@ export class LogBatch {
         this.buffer = [...batch, ...this.buffer].slice(0, remaining);
 
         if (this.config.debug) {
-          console.error("[FlareLog] Failed to send logs:", err);
+          runWithHookSkipped(() => {
+            console.error("[FlareLog] Failed to send logs:", err);
+          });
         }
       }
     });
@@ -110,10 +113,12 @@ export class LogBatch {
     const result = (await response.json()) as { result?: { data?: IngestResult } };
 
     if (this.config.debug) {
-      console.log(
-        `[FlareLog] Sent ${logs.length} logs. Result:`,
-        result.result?.data
-      );
+      runWithHookSkipped(() => {
+        console.log(
+          `[FlareLog] Sent ${logs.length} logs. Result:`,
+          result.result?.data
+        );
+      });
     }
   }
 

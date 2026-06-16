@@ -57,3 +57,68 @@ export function isErrorLike(val: unknown): val is { name: string; message: strin
     typeof (val as Record<string, unknown>).message === "string"
   );
 }
+
+export function getErrorFingerprint(err: unknown): string {
+  if (err instanceof Error) {
+    const firstFrame = err.stack?.split("\n")[1]?.trim() ?? "";
+    return `${err.name}:${err.message}:${firstFrame}`;
+  }
+
+  if (typeof err === "string") {
+    return err;
+  }
+
+  if (err === null || err === undefined) {
+    return "unknown";
+  }
+
+  try {
+    return String(err);
+  } catch {
+    return "unserializable";
+  }
+}
+
+export function buildConsoleError(args: unknown[]): Error {
+  const firstError = args.find((a): a is Error => a instanceof Error);
+  if (firstError) {
+    return firstError;
+  }
+
+  const message = args
+    .map((a) => (typeof a === "string" ? a : ""))
+    .filter(Boolean)
+    .join(" ") || "console output";
+
+  return new Error(message);
+}
+
+export function serializeConsoleArgs(args: unknown[]): unknown[] {
+  return args.map((arg) => {
+    if (arg instanceof Error) {
+      return serializeError(arg);
+    }
+
+    if (typeof arg === "object" && arg !== null) {
+      try {
+        return JSON.parse(JSON.stringify(arg));
+      } catch {
+        return String(arg);
+      }
+    }
+
+    return arg;
+  });
+}
+
+export function formatConsoleMessage(args: unknown[]): string {
+  const text = args
+    .map((a) => {
+      if (typeof a === "string") return a;
+      if (a instanceof Error) return a.message;
+      return "";
+    })
+    .filter(Boolean)
+    .join(" ");
+  return text || "console output";
+}

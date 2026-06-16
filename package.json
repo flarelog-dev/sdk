@@ -38,11 +38,13 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "check": "tsc --noEmit",
+    "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "tsup": "^8.0.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
   },
   "engines": {
     "node": ">=18"
