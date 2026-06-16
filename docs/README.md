@@ -6,68 +6,95 @@
 npm install @flarelog/sdk
 ```
 
-## Basic Usage
-
-### Browser
-
-```typescript
-import { FlareLog } from "@flarelog/sdk";
-
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  project: "my-website",
-  environment: "production",
-  autoCapture: {
-    console: true,
-    globalErrors: true,
-    rejections: true,
-  },
-});
-
-logger.info("Page loaded", { url: window.location.href });
-```
-
-### Node.js
-
-```typescript
-import { FlareLog } from "@flarelog/sdk";
-
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  project: "my-api",
-  environment: process.env.NODE_ENV,
-  autoCapture: {
-    console: true,
-    globalErrors: true,
-  },
-});
-
-logger.info("Server started", { port: 3000 });
-```
+## Quick Start (3 lines)
 
 ### Cloudflare Workers
 
 ```typescript
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  project: "my-worker",
-  environment: "production",
-});
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "my-worker" });
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    return logger.withRequest(
-      { request, traceId: crypto.randomUUID() },
-      ctx,
-      async () => {
-        logger.info("Request received", { url: request.url });
-        return new Response("Hello");
-      }
-    );
-  },
+  fetch: workerFetch(logger, async (request, env, ctx) => {
+    logger.info("Hello from worker!");
+    return new Response("Hello");
+  }),
 };
+```
+
+### Express.js
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+
+app.use(expressMiddleware(logger));
+app.use(expressErrorHandler(logger));
+```
+
+### Hono
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { honoMiddleware } from "@flarelog/sdk/hono";
+
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "api" });
+
+app.use("*", honoMiddleware(logger));
+```
+
+### Next.js
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { withFlareLog } from "@flarelog/sdk/next";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+
+export default withFlareLog(logger, async (req, res) => {
+  req.logger.info("Processing request");
+  res.json({ data: "Hello" });
+});
+```
+
+### React
+
+```tsx
+import { flarelog } from "@flarelog/sdk";
+import { FlareLogErrorBoundary, useFlareLog } from "@flarelog/sdk/react";
+
+const logger = flarelog({ apiKey: process.env.REACT_APP_FLARELOG_API_KEY, project: "web" });
+
+// Error Boundary
+<FlareLogErrorBoundary logger={logger}>
+  <App />
+</FlareLogErrorBoundary>
+
+// Hook
+const { trackEvent } = useFlareLog(logger);
+trackEvent("button_clicked", { button: "checkout" });
+```
+
+## The `flarelog()` Factory
+
+The `flarelog()` function is a branded factory that creates a `FlareLog` instance with sensible defaults:
+
+- **Auto-detects environment**: `development`, `production`, etc.
+- **Auto-detects release**: from `npm_package_version`, `VERCEL_GIT_COMMIT_SHA`, etc.
+- **Auto-detects server name**: hostname
+- **Auto-enables capture**: console, globalErrors, rejections
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+
+const logger = flarelog({
+  apiKey: "fl_your_api_key",
+  project: "my-app",
+  // Everything else is auto-detected!
+});
 ```
 
 ## Configuration
@@ -78,12 +105,12 @@ export default {
 | `project` | string | required | Project identifier |
 | `endpoint` | string | `https://flarelog.dev/api` | API endpoint |
 | `level` | LogLevel | `DEBUG` | Minimum log level |
-| `environment` | string | `development` | Environment name |
-| `release` | string | - | Release version |
-| `serverName` | string | - | Server identifier |
+| `environment` | string | auto-detected | Environment name |
+| `release` | string | auto-detected | Release version |
+| `serverName` | string | auto-detected | Server identifier |
 | `sampleRate` | number | `1.0` | Log sampling rate (0-1) |
 | `beforeSend` | function | - | Modify/drop logs before sending |
-| `autoCapture` | object | - | Automatic error capture config |
+| `autoCapture` | object | `{console, globalErrors, rejections}` | Auto-capture config |
 
 ## Log Levels
 
@@ -94,71 +121,29 @@ export default {
 - `ERROR` - Error events
 - `FATAL` - Critical errors
 
-## Methods
-
-### Logging
+## Core Methods
 
 ```typescript
+// Logging
 logger.trace(message, metadata?)
 logger.debug(message, metadata?)
 logger.info(message, metadata?)
 logger.warn(message, metadata?)
 logger.error(message, metadata?)
 logger.fatal(message, metadata?)
-```
 
-### Error Handling
-
-```typescript
-// Log error with context
+// Error handling
 logger.logError(error, { message, metadata, source })
-
-// Capture async function errors
 await logger.capture(() => riskyOperation(), { label: "Operation" })
 
-// Capture sync function errors
-logger.captureSync(() => riskyOperation(), { label: "Operation" })
-```
+// Context
+logger.setUser({ id, email, name })
+logger.setTag(key, value)
+logger.addBreadcrumb({ category, message, data })
 
-### Context
-
-```typescript
-// Set user context
-logger.setUser({ id: "123", email: "user@example.com" })
-
-// Add tags
-logger.setTag("version", "1.2.3")
-
-// Add breadcrumbs
-logger.addBreadcrumb({ category: "navigation", message: "Page loaded" })
-
-// Create child logger
-const child = logger.child({ source: "database", traceId: "abc-123" })
-```
-
-### Control
-
-```typescript
-// Flush logs immediately
+// Control
 await logger.flush()
-
-// Clean up resources
 logger.destroy()
-```
-
-## Auto Capture
-
-```typescript
-const logger = new FlareLog({
-  autoCapture: {
-    console: true,        // Capture console.error/warn
-    globalErrors: true,   // Capture window.onerror
-    rejections: true,     // Capture unhandled rejections
-    http: true,           // Capture fetch/XHR as breadcrumbs
-    navigation: true,     // Capture page navigation
-    clicks: true,         // Capture DOM clicks
-  },
-});
 ```
 
 ## Guides

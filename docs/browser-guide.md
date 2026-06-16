@@ -1,18 +1,26 @@
 # FlareLog SDK - Browser Guide
 
-## Basic Setup
+## Quick Start (3 lines)
 
-### Vanilla JavaScript
+```typescript
+import { flarelog } from "@flarelog/sdk";
+
+const logger = flarelog({ apiKey: "fl_your_api_key", project: "my-website" });
+
+logger.info("Page loaded", { url: window.location.href });
+```
+
+The `flarelog()` factory auto-detects environment and enables console/globalErrors/rejections capture by default.
+
+## Vanilla JavaScript
 
 ```html
 <script type="module">
-  import { FlareLog } from "@flarelog/sdk";
+  import { flarelog } from "@flarelog/sdk";
   
-  const logger = new FlareLog({
+  const logger = flarelog({
     apiKey: "fl_your_api_key",
     project: "my-website",
-    environment: "production",
-    release: "1.0.0",
     autoCapture: {
       console: true,
       globalErrors: true,
@@ -29,39 +37,20 @@
     email: "user@example.com",
   });
   
-  // Add breadcrumbs for user actions
-  logger.addBreadcrumb({
-    category: "navigation",
-    message: "User navigated to checkout",
-    data: { from: "/cart" }
-  });
-  
   // Manual logging
-  logger.info("Page loaded", { 
-    url: window.location.href,
-    referrer: document.referrer 
-  });
-  
-  // Track custom events
-  document.getElementById("buy-button").addEventListener("click", () => {
-    logger.info("Purchase clicked", { 
-      productId: "123",
-      price: 99.99 
-    });
-  });
+  logger.info("Page loaded", { url: window.location.href });
 </script>
 ```
 
-### React
+## React
 
 ```typescript
 // flarelog.ts
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog } from "@flarelog/sdk";
 
-export const logger = new FlareLog({
+export const logger = flarelog({
   apiKey: process.env.REACT_APP_FLARELOG_API_KEY!,
   project: "react-app",
-  environment: process.env.NODE_ENV,
   release: process.env.REACT_APP_VERSION,
   autoCapture: {
     console: true,
@@ -72,32 +61,38 @@ export const logger = new FlareLog({
     clicks: true,
   },
   beforeSend: (log) => {
-    // Scrub sensitive data
-    if (log.metadata?.password) {
-      delete log.metadata.password;
-    }
-    if (log.metadata?.token) {
-      log.metadata.token = "[REDACTED]";
-    }
+    if (log.metadata?.password) delete log.metadata.password;
+    if (log.metadata?.token) log.metadata.token = "[REDACTED]";
     return log;
   },
 });
 
-// hooks/useFlareLog.ts
-import { useEffect, useCallback } from "react";
-import { logger } from "../flarelog";
+// App.tsx
+import { FlareLogErrorBoundary } from "@flarelog/sdk/react";
 
-export function useFlareLog() {
-  const trackEvent = useCallback((event: string, data?: Record<string, unknown>) => {
-    logger.info(event, data);
-  }, []);
-  
-  const trackError = useCallback((error: Error, context?: Record<string, unknown>) => {
-    logger.logError(error, { metadata: context });
-  }, []);
-  
-  return { trackEvent, trackError };
+function App() {
+  return (
+    <FlareLogErrorBoundary logger={logger}>
+      <Router>
+        <Routes />
+      </Router>
+    </FlareLogErrorBoundary>
+  );
 }
+
+// Component.tsx
+import { useFlareLog } from "@flarelog/sdk/react";
+
+function MyComponent() {
+  const { trackEvent, trackError } = useFlareLog(logger);
+  
+  const handleClick = () => {
+    trackEvent("button_clicked", { button: "checkout" });
+  };
+  
+  return <button onClick={handleClick}>Click me</button>;
+}
+```
 
 // hooks/useUserTracking.ts
 import { useEffect } from "react";

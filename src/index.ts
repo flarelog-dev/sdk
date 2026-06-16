@@ -1,6 +1,12 @@
 // Core client
 export { FlareLog, FlareLogChild } from "./client";
 
+// Branded factory function
+export { flarelog } from "./factory";
+
+// Framework helpers
+export { workerFetch } from "./frameworks/cf-workers";
+
 // Types
 export type {
   FlareLogConfig,

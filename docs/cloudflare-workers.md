@@ -1,80 +1,58 @@
 # FlareLog SDK - Cloudflare Workers Guide
 
-## Basic Setup
-
-### Simple Worker (No Framework)
+## Quick Start (3 lines)
 
 ```typescript
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  project: "my-worker",
-  environment: "production",
-  release: "1.0.0",
-  autoCapture: {
-    globalErrors: true,
-    rejections: true,
-  },
-});
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "my-worker" });
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    return logger.withRequest(
-      { request, traceId: crypto.randomUUID() },
-      ctx,
-      async () => {
-        logger.info("Request received", { 
-          url: request.url,
-          method: request.method 
-        });
-
-        try {
-          const result = await handleRequest(request, env);
-          logger.info("Request completed", { status: 200 });
-          return result;
-        } catch (err) {
-          logger.logError(err, { message: "Request failed" });
-          return new Response("Internal Error", { status: 500 });
-        }
-      }
-    );
-  },
+  fetch: workerFetch(logger, async (request, env, ctx) => {
+    logger.info("Hello from worker!");
+    return new Response("Hello");
+  }),
 };
 ```
 
-### With Hono Framework
+The `flarelog()` factory auto-detects environment and enables console/globalErrors/rejections capture by default.
+
+## Simple Worker (No Framework)
+
+```typescript
+import { flarelog, workerFetch } from "@flarelog/sdk";
+
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "my-worker" });
+
+export default {
+  fetch: workerFetch(logger, async (request, env, ctx) => {
+    logger.info("Request received", { url: request.url, method: request.method });
+    
+    try {
+      const result = await handleRequest(request, env);
+      logger.info("Request completed", { status: 200 });
+      return result;
+    } catch (err) {
+      logger.logError(err, { message: "Request failed" });
+      return new Response("Internal Error", { status: 500 });
+    }
+  }),
+};
+```
+
+## With Hono Framework
 
 ```typescript
 import { Hono } from "hono";
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog } from "@flarelog/sdk";
+import { honoMiddleware } from "@flarelog/sdk/hono";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  project: "hono-app",
-  environment: "production",
-  autoCapture: {
-    console: true,
-    globalErrors: true,
-  },
-});
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "hono-app" });
 
 const app = new Hono();
 
-// Middleware to attach logger to context
-app.use("*", async (c, next) => {
-  const traceId = c.req.header("x-trace-id") || crypto.randomUUID();
-  
-  c.set("logger", logger.child({
-    source: "hono",
-    traceId,
-    path: c.req.path,
-    method: c.req.method,
-  }));
-  
-  c.set("traceId", traceId);
-  await next();
-});
+// One-line middleware setup
+app.use("*", honoMiddleware(logger));
 
 app.get("/api/users/:id", async (c) => {
   const log = c.get("logger");
@@ -83,9 +61,7 @@ app.get("/api/users/:id", async (c) => {
   log.info("Fetching user", { userId });
   
   try {
-    const user = await c.env.DB.prepare(
-      "SELECT * FROM users WHERE id = ?"
-    ).bind(userId).first();
+    const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
     
     if (!user) {
       log.warn("User not found", { userId });
@@ -95,10 +71,7 @@ app.get("/api/users/:id", async (c) => {
     log.info("User fetched", { userId });
     return c.json(user);
   } catch (err) {
-    log.logError(err, { 
-      message: "Failed to fetch user",
-      metadata: { userId }
-    });
+    log.logError(err, { message: "Failed to fetch user", metadata: { userId } });
     return c.json({ error: "Internal error" }, 500);
   }
 });
@@ -106,41 +79,22 @@ app.get("/api/users/:id", async (c) => {
 export default app;
 ```
 
-### With Itty-Router (Dead Simple)
+## With Itty-Router (Dead Simple)
 
 ```typescript
 import { Router } from "itty-router";
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  project: "itty-app",
-  environment: "production",
-});
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "itty-app" });
 
 const router = Router();
 
 router.get("/api/hello", async (request, env, ctx) => {
-  const traceId = request.headers.get("x-trace-id") || crypto.randomUUID();
-  
-  logger.addBreadcrumb({
-    category: "request",
-    message: `GET /api/hello`,
-    data: { traceId }
-  });
-  
-  try {
-    logger.info("Hello endpoint called");
-    return new Response("Hello World!");
-  } catch (err) {
-    logger.logError(err, { traceId });
-    return new Response("Error", { status: 500 });
-  }
+  logger.info("Hello endpoint called");
+  return new Response("Hello World!");
 });
 
-export default {
-  fetch: router.handle,
-};
+export default { fetch: workerFetch(logger, router.handle) };
 ```
 
 ## Durable Objects

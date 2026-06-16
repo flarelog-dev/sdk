@@ -30,13 +30,59 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./express": {
+      "import": {
+        "types": "./dist/frameworks/express.d.ts",
+        "default": "./dist/frameworks/express.js"
+      },
+      "require": {
+        "types": "./dist/frameworks/express.d.cts",
+        "default": "./dist/frameworks/express.cjs"
+      }
+    },
+    "./hono": {
+      "import": {
+        "types": "./dist/frameworks/hono.d.ts",
+        "default": "./dist/frameworks/hono.js"
+      },
+      "require": {
+        "types": "./dist/frameworks/hono.d.cts",
+        "default": "./dist/frameworks/hono.cjs"
+      }
+    },
+    "./next": {
+      "import": {
+        "types": "./dist/frameworks/next.d.ts",
+        "default": "./dist/frameworks/next.js"
+      },
+      "require": {
+        "types": "./dist/frameworks/next.d.cts",
+        "default": "./dist/frameworks/next.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/frameworks/react.d.ts",
+        "default": "./dist/frameworks/react.js"
+      }
+    },
+    "./cf-workers": {
+      "import": {
+        "types": "./dist/frameworks/cf-workers.d.ts",
+        "default": "./dist/frameworks/cf-workers.js"
+      },
+      "require": {
+        "types": "./dist/frameworks/cf-workers.d.cts",
+        "default": "./dist/frameworks/cf-workers.cjs"
+      }
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "build": "tsup src/index.ts src/frameworks/*.ts --format esm,cjs --dts --clean",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "prepublishOnly": "npm run build"

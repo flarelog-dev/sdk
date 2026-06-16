@@ -1,75 +1,35 @@
 # FlareLog SDK - Node.js Guide
 
-## Basic Setup
+## Quick Start (3 lines)
 
-### Express.js
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+
+app.use(expressMiddleware(logger));
+app.use(expressErrorHandler(logger));
+```
+
+The `flarelog()` factory auto-detects environment, release, and serverName.
+
+## Express.js
 
 ```typescript
 import express from "express";
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog } from "@flarelog/sdk";
+import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  project: "express-api",
-  environment: process.env.NODE_ENV || "development",
-  release: process.env.npm_package_version,
-  serverName: require("os").hostname(),
-  autoCapture: {
-    console: true,
-    globalErrors: true,
-    rejections: true,
-  },
-  beforeSend: (log) => {
-    // Scrub sensitive data
-    if (log.metadata?.password) delete log.metadata.password;
-    return log;
-  },
-});
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
 
 const app = express();
 
-// Request logging middleware
-app.use((req, res, next) => {
-  const traceId = req.headers["x-trace-id"] as string || crypto.randomUUID();
-  req.traceId = traceId;
-  
-  const child = logger.child({
-    source: "express",
-    traceId,
-    method: req.method,
-    path: req.path,
-    ip: req.ip,
-  });
-  
-  req.logger = child;
-  
-  const start = Date.now();
-  
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    child.info("Request completed", {
-      status: res.statusCode,
-      durationMs: duration,
-    });
-  });
-  
-  next();
-});
+// 2-line setup for request logging + error handling
+app.use(expressMiddleware(logger));
+app.use(expressErrorHandler(logger));
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  req.logger?.logError(err, {
-    message: "Express error",
-    metadata: {
-      path: req.path,
-      method: req.method,
-    },
-  });
-  
-  res.status(500).json({ error: "Internal server error" });
-});
-
-// Routes
+// Routes - req.logger is automatically available
 app.get("/api/users/:id", async (req, res) => {
   try {
     req.logger.info("Fetching user", { userId: req.params.id });
