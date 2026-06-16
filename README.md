@@ -6,6 +6,8 @@ Zero-config logging SDK for Cloudflare Workers, Node.js, and any JavaScript runt
 
 - **Cloudflare Workers first** — Works seamlessly in edge environments
 - **Zero config** — Just an API key and project name
+- **Auto-detection** — Environment, release, and server name detected automatically
+- **Framework integrations** — Express, Hono, Next.js, React, and more
 - **Structured logging** — Attach metadata to every log entry
 - **Automatic batching** — Efficient log transmission with configurable batch size
 - **Log levels** — TRACE, DEBUG, INFO, WARN, ERROR, FATAL with level filtering
@@ -19,56 +21,95 @@ Zero-config logging SDK for Cloudflare Workers, Node.js, and any JavaScript runt
 npm install @flarelog/sdk
 ```
 
-## Quick Start
+## Quick Start (3 lines)
+
+### Cloudflare Workers
 
 ```typescript
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "lf_your_api_key_here",
-  project: "my-cloudflare-worker",
-});
-
-logger.info("Server started", { port: 8787 });
-logger.warn("High latency detected", { durationMs: 2500, route: "/api/users" });
-logger.error("Database connection failed", { error: err.message });
-```
-
-## Cloudflare Workers Example
-
-```typescript
-import { FlareLog } from "@flarelog/sdk";
-
-const logger = new FlareLog({
-  apiKey: "lf_your_api_key_here",
-  project: "my-worker",
-  level: "INFO",           // Only send INFO and above
-  batchSize: 5,            // Send every 5 logs
-  flushIntervalMs: 3000,   // Or every 3 seconds
-});
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "my-worker" });
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    logger.info("Request received", {
-      method: request.method,
-      url: request.url,
-    });
-
-    try {
-      const response = await handleRequest(request);
-      logger.info("Request completed", { status: response.status });
-      return response;
-    } catch (err) {
-      logger.error("Request failed", {
-        error: err instanceof Error ? err.message : "Unknown",
-      });
-      throw err;
-    } finally {
-      // Ensure logs are sent before the worker exits
-      ctx.waitUntil(logger.flush());
-    }
-  },
+  fetch: workerFetch(logger, async (request, env, ctx) => {
+    logger.info("Hello from worker!");
+    return new Response("Hello");
+  }),
 };
+```
+
+### Express.js
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+
+app.use(expressMiddleware(logger));
+app.use(expressErrorHandler(logger));
+```
+
+### Hono
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { honoMiddleware } from "@flarelog/sdk/hono";
+
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "api" });
+
+app.use("*", honoMiddleware(logger));
+```
+
+### Next.js
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { withFlareLog } from "@flarelog/sdk/next";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+
+export default withFlareLog(logger, async (req, res) => {
+  req.logger.info("Processing request");
+  res.json({ data: "Hello" });
+});
+```
+
+### React
+
+```tsx
+import { flarelog } from "@flarelog/sdk";
+import { FlareLogErrorBoundary, useFlareLog } from "@flarelog/sdk/react";
+
+const logger = flarelog({ apiKey: process.env.REACT_APP_FLARELOG_API_KEY, project: "web" });
+
+// Error Boundary
+<FlareLogErrorBoundary logger={logger}>
+  <App />
+</FlareLogErrorBoundary>
+
+// Hook
+const { trackEvent } = useFlareLog(logger);
+trackEvent("button_clicked", { button: "checkout" });
+```
+
+## The `flarelog()` Factory
+
+The `flarelog()` function is a branded factory that creates a `FlareLog` instance with sensible defaults:
+
+- **Auto-detects environment**: `development`, `production`, etc.
+- **Auto-detects release**: from `npm_package_version`, `VERCEL_GIT_COMMIT_SHA`, etc.
+- **Auto-detects server name**: hostname
+- **Auto-enables capture**: console, globalErrors, rejections
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+
+const logger = flarelog({
+  apiKey: "fl_your_api_key",
+  project: "my-app",
+  // Everything else is auto-detected!
+});
 ```
 
 ## Configuration
@@ -79,10 +120,16 @@ export default {
 | `project` | `string` | **required** | Project slug to send logs to |
 | `endpoint` | `string` | `https://flarelog.dev/api` | FlareLog API endpoint |
 | `level` | `LogLevel` | `"DEBUG"` | Minimum log level to send |
+| `environment` | `string` | auto-detected | Environment name |
+| `release` | `string` | auto-detected | Release version |
+| `serverName` | `string` | auto-detected | Server identifier |
 | `batchSize` | `number` | `10` | Logs to batch before sending |
 | `flushIntervalMs` | `number` | `5000` | Max time before flushing |
 | `debug` | `boolean` | `false` | Enable SDK debug logging |
 | `defaultSource` | `string` | `""` | Default source tag for logs |
+| `sampleRate` | `number` | `1.0` | Log sampling rate (0-1) |
+| `beforeSend` | `function` | - | Modify/drop logs before sending |
+| `autoCapture` | `object` | `{console, globalErrors, rejections}` | Auto-capture config |
 
 ## Log Levels
 
@@ -93,6 +140,31 @@ TRACE < DEBUG < INFO < WARN < ERROR < FATAL
 ```
 
 Set `level` in config to filter which logs are sent. For example, `level: "WARN"` will only send WARN, ERROR, and FATAL logs.
+
+## Core Methods
+
+```typescript
+// Logging
+logger.trace(message, metadata?)
+logger.debug(message, metadata?)
+logger.info(message, metadata?)
+logger.warn(message, metadata?)
+logger.error(message, metadata?)
+logger.fatal(message, metadata?)
+
+// Error handling
+logger.logError(error, { message, metadata, source })
+await logger.capture(() => riskyOperation(), { label: "Operation" })
+
+// Context
+logger.setUser({ id, email, name })
+logger.setTag(key, value)
+logger.addBreadcrumb({ category, message, data })
+
+// Control
+await logger.flush()
+logger.destroy()
+```
 
 ## Child Loggers
 
@@ -136,6 +208,13 @@ logger.logRaw({
   spanId: "def456",
 });
 ```
+
+## Documentation
+
+- [Cloudflare Workers Guide](./docs/cloudflare-workers.md) - Workers, Durable Objects, Queues, R2, KV
+- [Browser Guide](./docs/browser-guide.md) - React, Vue, Next.js, Svelte, Web Vitals
+- [Node.js Guide](./docs/nodejs-guide.md) - Express, Fastify, NestJS, Koa
+- [Advanced Features](./docs/advanced-features.md) - Breadcrumbs, tags, beforeSend, sampleRate
 
 ## License
 
