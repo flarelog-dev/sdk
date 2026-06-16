@@ -29,7 +29,7 @@ export class LogBatch {
       batchSize: config.batchSize ?? 10,
       flushIntervalMs: config.flushIntervalMs ?? 5000,
       debug: config.debug ?? false,
-      endpoint: (config.endpoint ?? "https://flarelog.dev/api").replace(/\/$/, ""),
+      endpoint: (config.endpoint ?? "https://flarelog.dev").replace(/\/$/, ""),
     };
     this.apiKey = apiKey;
     this.endpoint = this.config.endpoint;
@@ -111,6 +111,12 @@ export class LogBatch {
     }
 
     const result = (await response.json()) as { result?: { data?: IngestResult } };
+
+    if (result.result?.data?.success === false) {
+      throw new Error(
+        `Ingestion failed: ${result.result.data.error ?? "Unknown error"}`
+      );
+    }
 
     if (this.config.debug) {
       runWithHookSkipped(() => {
