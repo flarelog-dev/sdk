@@ -194,7 +194,13 @@ export class FlareLog {
       return;
     }
 
-    this.batch.add(processed);
+    // Ensure timestamp is set after beforeSend
+    const finalEntry: QueuedLog = {
+      ...processed,
+      timestamp: processed.timestamp ?? new Date().toISOString(),
+    };
+
+    this.batch.add(finalEntry);
   }
 
   logRaw(entry: LogEntry): void {
@@ -213,7 +219,13 @@ export class FlareLog {
       return;
     }
 
-    this.batch.add(processed);
+    // Ensure timestamp is set after beforeSend
+    const finalEntry: QueuedLog = {
+      ...processed,
+      timestamp: processed.timestamp ?? new Date().toISOString(),
+    };
+
+    this.batch.add(finalEntry);
   }
 
   logError(
@@ -556,9 +568,9 @@ export class FlareLog {
         };
       }
 
-      if (typeof process !== "undefined") {
-        enriched.nodeVersion = process.version;
-        enriched.platform = process.platform;
+      if (typeof (globalThis as any).process !== "undefined" && (globalThis as any).process.version) {
+        enriched.nodeVersion = (globalThis as any).process.version;
+        enriched.platform = (globalThis as any).process.platform;
       }
     } catch {
       // Ignore environment detection errors
@@ -643,9 +655,10 @@ export class FlareLog {
       handlers.push(() => window.removeEventListener("popstate", onPopState));
 
       const originalPushState = history.pushState;
+      const self = this;
       history.pushState = function (...args: Parameters<typeof history.pushState>) {
-        originalPushState.apply(this, args);
-        this.addBreadcrumb({
+        originalPushState.apply(history, args);
+        self.addBreadcrumb({
           category: "navigation",
           message: `Navigation to ${window.location.href}`,
           data: { url: window.location.href, path: window.location.pathname },
