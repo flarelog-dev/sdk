@@ -1,5 +1,21 @@
 import type { FlareLog } from "../client";
-import type { MiddlewareHandler } from "hono";
+
+// Inline types to avoid Hono dependency
+interface Context {
+  req: {
+    header(name: string): string | undefined;
+    method: string;
+    path: string;
+  };
+  res: {
+    status: number;
+  };
+  set(key: string, value: unknown): void;
+}
+
+interface Next {
+  (): Promise<void>;
+}
 
 /**
  * Hono middleware for automatic request logging.
@@ -17,8 +33,8 @@ import type { MiddlewareHandler } from "hono";
  * app.use("*", honoMiddleware(logger));
  * ```
  */
-export function honoMiddleware(logger: FlareLog): MiddlewareHandler {
-  return async (c, next) => {
+export function honoMiddleware(logger: FlareLog) {
+  return async (c: Context, next: Next) => {
     const traceId = c.req.header("x-trace-id") || crypto.randomUUID();
 
     const child = logger.child({

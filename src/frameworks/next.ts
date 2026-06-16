@@ -1,5 +1,17 @@
 import type { FlareLog } from "../client";
-import type { NextApiRequest, NextApiResponse } from "next";
+
+// Use inline types instead of importing from 'next' to avoid dependency
+interface NextApiRequest {
+  headers: Record<string, string | string[] | undefined>;
+  method?: string;
+  url?: string;
+}
+
+interface NextApiResponse {
+  statusCode: number;
+  json: (data: unknown) => void;
+  status: (code: number) => NextApiResponse;
+}
 
 /**
  * Next.js API route wrapper with automatic logging.

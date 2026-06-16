@@ -1,13 +1,22 @@
-import type { FlareLog } from "../client";
-import type { Request, Response, NextFunction } from "express";
+import type { FlareLog, FlareLogChild } from "../client";
 
-declare global {
-  namespace Express {
-    interface Request {
-      logger: FlareLog;
-      traceId: string;
-    }
-  }
+// Inline types to avoid Express dependency
+interface Request {
+  headers: Record<string, string | string[] | undefined>;
+  method: string;
+  path: string;
+  ip?: string;
+  logger?: FlareLog | FlareLogChild;
+  traceId?: string;
+}
+
+interface Response {
+  statusCode: number;
+  on(event: string, callback: () => void): void;
+}
+
+interface NextFunction {
+  (err?: Error): void;
 }
 
 /**
@@ -68,7 +77,7 @@ export function expressMiddleware(logger: FlareLog) {
  * app.use(expressErrorHandler(logger));
  * ```
  */
-export function expressErrorHandler(logger: FlareLog) {
+export function expressErrorHandler(_logger: FlareLog) {
   return (err: Error, req: Request, res: Response, _next: NextFunction) => {
     req.logger?.logError(err, {
       message: "Express error",
@@ -78,6 +87,7 @@ export function expressErrorHandler(logger: FlareLog) {
       },
     });
 
-    res.status(500).json({ error: "Internal server error" });
+    res.statusCode = 500;
+    (res as any).json({ error: "Internal server error" });
   };
 }
