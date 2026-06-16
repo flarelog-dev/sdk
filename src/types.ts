@@ -90,6 +90,7 @@ export interface ConsoleCaptureOptions {
 export interface IngestResult {
   success: boolean;
   ingested: number;
+  error?: string;
 }
 
 /**

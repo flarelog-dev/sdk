@@ -86,7 +86,8 @@ export class LogBatch {
 
   /** Send a batch of logs to the ingestion endpoint */
   private async sendBatch(logs: QueuedLog[]): Promise<void> {
-    const response = await fetch(`${this.endpoint}/api/trpc/log.ingest`, {
+    const baseUrl = this.endpoint.endsWith("/api") ? this.endpoint : `${this.endpoint}/api`;
+    const response = await fetch(`${baseUrl}/trpc/log.ingest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
