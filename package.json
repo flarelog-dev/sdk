@@ -2,13 +2,19 @@
   "name": "@flarelog/sdk",
   "version": "0.1.5",
   "description": "Zero-config logging SDK for Cloudflare Workers and Node.js. Send logs to FlareLog with minimal setup.",
-  "keywords": ["logging", "cloudflare-workers", "edge", "observability", "logs"],
+  "keywords": [
+    "logging",
+    "cloudflare-workers",
+    "edge",
+    "observability",
+    "logs"
+  ],
   "author": "Chiheb Nabil",
   "license": "MIT",
   "homepage": "https://flarelog.dev/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/flarelog-dev/sdk"
+    "url": "git+https://github.com/flarelog-dev/sdk.git"
   },
   "type": "module",
   "main": "./dist/index.cjs",
@@ -26,7 +32,9 @@
       }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "check": "tsc --noEmit",
