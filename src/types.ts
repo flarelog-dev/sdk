@@ -29,6 +29,27 @@ export interface LogEntry {
 }
 
 /**
+ * User context for identifying who experienced an error
+ */
+export interface UserContext {
+  id?: string;
+  email?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Breadcrumb entry for tracking events leading to an error
+ */
+export interface Breadcrumb {
+  timestamp: string;
+  category: string;
+  message: string;
+  level?: LogLevel;
+  data?: Record<string, unknown>;
+}
+
+/**
  * Configuration options for the FlareLog client
  */
 export interface FlareLogConfig {
@@ -52,6 +73,16 @@ export interface FlareLogConfig {
   includeTimestamps?: boolean;
   /** Automatic error capture configuration */
   autoCapture?: AutoCaptureConfig;
+  /** Environment name (e.g., "production", "staging", "development") */
+  environment?: string;
+  /** Release version (e.g., "1.2.3" or git commit SHA) */
+  release?: string;
+  /** Server hostname or instance identifier */
+  serverName?: string;
+  /** Callback to modify or drop logs before sending. Return false to drop. */
+  beforeSend?: (log: LogEntry) => LogEntry | false;
+  /** Sample rate for logs (0.0 to 1.0). Defaults to 1.0 (100%) */
+  sampleRate?: number;
 }
 
 /**
@@ -70,6 +101,12 @@ export interface AutoCaptureConfig {
   worker?: boolean;
   /** Deduplication window in milliseconds. Defaults to 5000 */
   dedupWindowMs?: number;
+  /** Capture navigation breadcrumbs */
+  navigation?: boolean;
+  /** Capture fetch/XHR breadcrumbs and performance data */
+  http?: boolean;
+  /** Capture DOM click breadcrumbs */
+  clicks?: boolean;
 }
 
 /**
@@ -135,6 +172,9 @@ export interface FlareLogLike {
       traceId?: string;
     }
   ): void;
+  addBreadcrumb(breadcrumb: Omit<Breadcrumb, "timestamp">): void;
+  setUser(user: UserContext | null): void;
+  setTag(key: string, value: string): void;
   flush(): Promise<void>;
   child(defaults: Record<string, unknown> & { source?: string }): FlareLogLike;
 }

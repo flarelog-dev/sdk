@@ -7,6 +7,8 @@ import type {
   RequestContext,
   ConsoleCaptureOptions,
   WorkerFetchHandler,
+  UserContext,
+  Breadcrumb,
 } from "./types";
 import { LogBatch } from "./batch";
 import { shouldLog } from "./levels";
@@ -25,9 +27,21 @@ import { DedupTracker } from "./dedup";
  * const logger = new FlareLog({
  *   apiKey: "lf_your_api_key",
  *   project: "my-worker",
+ *   environment: "production",
+ *   release: "1.2.3",
  * });
  *
  * logger.info("Server started", { port: 8787 });
+ *
+ * // Set user context
+ * logger.setUser({ id: "user_123", email: "user@example.com" });
+ *
+ * // Add breadcrumbs
+ * logger.addBreadcrumb({
+ *   category: "navigation",
+ *   message: "User navigated to /checkout",
+ *   data: { from: "/cart" }
+ * });
  *
  * // Capture errors automatically
  * const result = await logger.capture(() => riskyOperation());
@@ -48,6 +62,12 @@ export class FlareLog {
   private dedup: DedupTracker;
   private consoleCleanup?: () => void;
   private globalCleanup?: () => void;
+  private breadcrumbs: Breadcrumb[] = [];
+  private user: UserContext | null = null;
+  private tags: Map<string, string> = new Map();
+  private httpCleanup?: () => void;
+  private navigationCleanup?: () => void;
+  private clickCleanup?: () => void;
 
   constructor(config: FlareLogConfig) {
     if (!config.apiKey) {
@@ -68,6 +88,11 @@ export class FlareLog {
       apiKey: config.apiKey,
       project: config.project,
       autoCapture: config.autoCapture ?? {},
+      environment: config.environment ?? "development",
+      release: config.release ?? "",
+      serverName: config.serverName ?? "",
+      beforeSend: config.beforeSend ?? ((log: LogEntry) => log),
+      sampleRate: config.sampleRate ?? 1.0,
     };
 
     this.dedup = new DedupTracker({
@@ -101,6 +126,18 @@ export class FlareLog {
         errors: this.config.autoCapture.globalErrors,
         rejections: this.config.autoCapture.rejections,
       });
+    }
+
+    if (this.config.autoCapture.http) {
+      this.httpCleanup = this.installHttpInstrumentation();
+    }
+
+    if (this.config.autoCapture.navigation) {
+      this.navigationCleanup = this.installNavigationInstrumentation();
+    }
+
+    if (this.config.autoCapture.clicks) {
+      this.clickCleanup = this.installClickInstrumentation();
     }
   }
 
@@ -138,17 +175,26 @@ export class FlareLog {
       return;
     }
 
+    if (Math.random() > this.config.sampleRate) {
+      return;
+    }
+
     const entry: QueuedLog = {
       timestamp: new Date().toISOString(),
       level,
       message,
       source: opts?.source ?? this.config.defaultSource,
-      metadata,
+      metadata: this.enrichMetadata(metadata),
       traceId: opts?.traceId,
       spanId: opts?.spanId,
     };
 
-    this.batch.add(entry);
+    const processed = this.config.beforeSend(entry);
+    if (processed === false) {
+      return;
+    }
+
+    this.batch.add(processed);
   }
 
   logRaw(entry: LogEntry): void {
@@ -159,9 +205,15 @@ export class FlareLog {
     const queued: QueuedLog = {
       ...entry,
       timestamp: entry.timestamp ?? new Date().toISOString(),
+      metadata: this.enrichMetadata(entry.metadata),
     };
 
-    this.batch.add(queued);
+    const processed = this.config.beforeSend(queued);
+    if (processed === false) {
+      return;
+    }
+
+    this.batch.add(processed);
   }
 
   logError(
@@ -182,6 +234,7 @@ export class FlareLog {
     this.log(level, message, {
       ...opts?.metadata,
       error: errorData,
+      breadcrumbs: this.breadcrumbs.slice(-50),
     }, {
       source: opts?.source ?? this.config.defaultSource,
       traceId: opts?.traceId,
@@ -270,6 +323,34 @@ export class FlareLog {
       executionCtx.waitUntil(this.flush());
       throw err;
     }
+  }
+
+  /**
+   * Add a breadcrumb to track events leading to errors
+   */
+  addBreadcrumb(breadcrumb: Omit<Breadcrumb, "timestamp">): void {
+    this.breadcrumbs.push({
+      ...breadcrumb,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (this.breadcrumbs.length > 100) {
+      this.breadcrumbs = this.breadcrumbs.slice(-50);
+    }
+  }
+
+  /**
+   * Set user context for identifying affected users
+   */
+  setUser(user: UserContext | null): void {
+    this.user = user;
+  }
+
+  /**
+   * Set a tag for filtering and searching logs
+   */
+  setTag(key: string, value: string): void {
+    this.tags.set(key, value);
   }
 
   /**
@@ -420,8 +501,211 @@ export class FlareLog {
     this.batch.destroy();
     this.consoleCleanup?.();
     this.globalCleanup?.();
+    this.httpCleanup?.();
+    this.navigationCleanup?.();
+    this.clickCleanup?.();
     this.consoleCleanup = undefined;
     this.globalCleanup = undefined;
+    this.httpCleanup = undefined;
+    this.navigationCleanup = undefined;
+    this.clickCleanup = undefined;
+  }
+
+  private enrichMetadata(metadata?: Record<string, unknown>): Record<string, unknown> {
+    const enriched: Record<string, unknown> = {
+      ...metadata,
+    };
+
+    if (this.user) {
+      enriched.user = this.user;
+    }
+
+    if (this.tags.size > 0) {
+      enriched.tags = Object.fromEntries(this.tags);
+    }
+
+    if (this.config.environment) {
+      enriched.environment = this.config.environment;
+    }
+
+    if (this.config.release) {
+      enriched.release = this.config.release;
+    }
+
+    if (this.config.serverName) {
+      enriched.serverName = this.config.serverName;
+    }
+
+    try {
+      if (typeof navigator !== "undefined") {
+        enriched.userAgent = navigator.userAgent;
+        enriched.language = navigator.language;
+        enriched.onLine = navigator.onLine;
+      }
+
+      if (typeof window !== "undefined") {
+        enriched.url = window.location?.href;
+        enriched.referrer = document?.referrer;
+        enriched.viewport = {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        };
+        enriched.screen = {
+          width: window.screen?.width,
+          height: window.screen?.height,
+        };
+      }
+
+      if (typeof process !== "undefined") {
+        enriched.nodeVersion = process.version;
+        enriched.platform = process.platform;
+      }
+    } catch {
+      // Ignore environment detection errors
+    }
+
+    return enriched;
+  }
+
+  private installHttpInstrumentation(): () => void {
+    const handlers: Array<() => void> = [];
+
+    try {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+        const [url, init] = args;
+        const start = Date.now();
+        const method = init?.method ?? "GET";
+        const urlString = typeof url === "string" ? url : url.toString();
+
+        this.addBreadcrumb({
+          category: "http",
+          message: `${method} ${urlString}`,
+          data: { url: urlString, method },
+        });
+
+        try {
+          const response = await originalFetch.apply(globalThis, args);
+          const duration = Date.now() - start;
+
+          this.addBreadcrumb({
+            category: "http",
+            message: `${method} ${urlString} - ${response.status}`,
+            data: { url: urlString, method, status: response.status, durationMs: duration },
+          });
+
+          return response;
+        } catch (err) {
+          const duration = Date.now() - start;
+
+          this.addBreadcrumb({
+            category: "http",
+            message: `${method} ${urlString} - failed`,
+            level: "ERROR",
+            data: { url: urlString, method, error: (err as Error).message, durationMs: duration },
+          });
+
+          throw err;
+        }
+      };
+
+      handlers.push(() => {
+        globalThis.fetch = originalFetch;
+      });
+    } catch {
+      // fetch not available
+    }
+
+    return () => {
+      for (const cleanup of handlers) {
+        try {
+          cleanup();
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    };
+  }
+
+  private installNavigationInstrumentation(): () => void {
+    const handlers: Array<() => void> = [];
+
+    try {
+      const onPopState = () => {
+        this.addBreadcrumb({
+          category: "navigation",
+          message: `Navigation to ${window.location.href}`,
+          data: { url: window.location.href, path: window.location.pathname },
+        });
+      };
+
+      window.addEventListener("popstate", onPopState);
+      handlers.push(() => window.removeEventListener("popstate", onPopState));
+
+      const originalPushState = history.pushState;
+      history.pushState = function (...args: Parameters<typeof history.pushState>) {
+        originalPushState.apply(this, args);
+        this.addBreadcrumb({
+          category: "navigation",
+          message: `Navigation to ${window.location.href}`,
+          data: { url: window.location.href, path: window.location.pathname },
+        });
+      }.bind(this);
+
+      handlers.push(() => {
+        history.pushState = originalPushState;
+      });
+    } catch {
+      // Not in browser
+    }
+
+    return () => {
+      for (const cleanup of handlers) {
+        try {
+          cleanup();
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    };
+  }
+
+  private installClickInstrumentation(): () => void {
+    const handlers: Array<() => void> = [];
+
+    try {
+      const onClick = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if (!target) return;
+
+        const tagName = target.tagName?.toLowerCase();
+        const id = target.id ? `#${target.id}` : "";
+        const className = target.className ? `.${target.className.split(" ").join(".")}` : "";
+        const selector = `${tagName}${id}${className}`;
+        const text = target.textContent?.substring(0, 100) ?? "";
+
+        this.addBreadcrumb({
+          category: "ui.click",
+          message: `Click on ${selector}`,
+          data: { selector, text, tagName },
+        });
+      };
+
+      document.addEventListener("click", onClick, true);
+      handlers.push(() => document.removeEventListener("click", onClick, true));
+    } catch {
+      // Not in browser
+    }
+
+    return () => {
+      for (const cleanup of handlers) {
+        try {
+          cleanup();
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    };
   }
 
   private captureAutomatic(
@@ -505,6 +789,18 @@ export class FlareLogChild {
       source: opts?.source ?? this.defaultSource,
       metadata: { ...this.defaults, ...opts?.metadata },
     });
+  }
+
+  addBreadcrumb(breadcrumb: Omit<Breadcrumb, "timestamp">): void {
+    this.parent.addBreadcrumb(breadcrumb);
+  }
+
+  setUser(user: UserContext | null): void {
+    this.parent.setUser(user);
+  }
+
+  setTag(key: string, value: string): void {
+    this.parent.setTag(key, value);
   }
 
   async capture<T>(
