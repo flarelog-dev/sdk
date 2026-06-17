@@ -40,7 +40,13 @@ export function createWorkerFetchHandler<T = Response>(
         status,
       });
 
-      ctx.waitUntil(logger.flush());
+      // Opportunistic flush: logs accumulated during the handler are batched
+      // Final guarantee via ctx.waitUntil (or blocking fallback)
+      if (typeof ctx.waitUntil === 'function') {
+        ctx.waitUntil(logger.flush());
+      } else {
+        await logger.flush();
+      }
       return result;
     } catch (err) {
       const duration = Date.now() - start;
@@ -49,7 +55,13 @@ export function createWorkerFetchHandler<T = Response>(
         metadata: { durationMs: duration, url: request.url },
       });
 
-      ctx.waitUntil(logger.flush());
+      // Opportunistic flush: logs accumulated during the handler are batched
+      // Final guarantee via ctx.waitUntil (or blocking fallback)
+      if (typeof ctx.waitUntil === 'function') {
+        ctx.waitUntil(logger.flush());
+      } else {
+        await logger.flush();
+      }
       throw err;
     }
   };

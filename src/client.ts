@@ -80,8 +80,8 @@ export class FlareLog {
     this.config = {
       endpoint: config.endpoint ?? "https://flarelog.dev/api",
       level: config.level ?? "DEBUG",
-      batchSize: config.batchSize ?? 10,
-      flushIntervalMs: config.flushIntervalMs ?? 5000,
+      batchSize: config.batchSize ?? (config.workerMode ? 1 : 10),
+      flushIntervalMs: config.flushIntervalMs ?? (config.workerMode ? 0 : 5000),
       debug: config.debug ?? false,
       defaultSource: config.defaultSource ?? "",
       includeTimestamps: config.includeTimestamps ?? true,
@@ -93,6 +93,8 @@ export class FlareLog {
       serverName: config.serverName ?? "",
       beforeSend: config.beforeSend ?? ((log: LogEntry) => log),
       sampleRate: config.sampleRate ?? 1.0,
+      maxBatchSize: config.maxBatchSize ?? 100,
+      workerMode: config.workerMode ?? false,
     };
 
     this.dedup = new DedupTracker({
@@ -108,6 +110,8 @@ export class FlareLog {
         flushIntervalMs: this.config.flushIntervalMs,
         debug: this.config.debug,
         endpoint: this.config.endpoint,
+        maxBatchSize: this.config.maxBatchSize,
+        workerMode: this.config.workerMode,
       },
       this.config.apiKey,
       this.config.project

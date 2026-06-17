@@ -61,9 +61,9 @@ export interface FlareLogConfig {
   endpoint?: string;
   /** Minimum log level to send. Defaults to "DEBUG" */
   level?: LogLevel;
-  /** Number of logs to batch before sending. Defaults to 10 */
+  /** Number of logs to batch before sending. Defaults to 10 (Node), 1 (Worker) */
   batchSize?: number;
-  /** Flush interval in milliseconds. Defaults to 5000 */
+  /** Flush interval in milliseconds. Defaults to 5000 (Node), 0 (Worker) */
   flushIntervalMs?: number;
   /** Whether to enable debug logging. Defaults to false */
   debug?: boolean;
@@ -83,6 +83,10 @@ export interface FlareLogConfig {
   beforeSend?: (log: LogEntry) => LogEntry | false;
   /** Sample rate for logs (0.0 to 1.0). Defaults to 1.0 (100%) */
   sampleRate?: number;
+  /** Max in-flight buffer size. Defaults to 100 */
+  maxBatchSize?: number;
+  /** Worker mode: auto-detects if not set. When true, flushes immediately with no timer. */
+  workerMode?: boolean;
 }
 
 /**
@@ -180,10 +184,11 @@ export interface FlareLogLike {
 }
 
 /**
- * Execution context shape used by Cloudflare Workers and similar runtimes
+ * Execution context shape used by Cloudflare Workers and similar runtimes.
+ * waitUntil is optional to allow graceful degradation in test/custom environments.
  */
 export interface ExecutionContextLike {
-  waitUntil(promise: Promise<unknown>): void;
+  waitUntil?(promise: Promise<unknown>): void;
   passThroughOnException?(): void;
 }
 

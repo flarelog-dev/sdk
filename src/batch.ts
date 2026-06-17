@@ -6,11 +6,16 @@ interface BatchConfig {
   flushIntervalMs: number;
   debug: boolean;
   endpoint: string;
+  maxBatchSize: number;
+  workerMode: boolean;
 }
 
 /**
  * Buffers logs and flushes them in batches.
  * Works in both Node.js and Cloudflare Workers environments.
+ * 
+ * Worker mode: flushes immediately on every log (batchSize=1, no timer)
+ * Normal mode: batches by count and timer
  */
 export class LogBatch {
   private buffer: QueuedLog[] = [];
@@ -21,15 +26,18 @@ export class LogBatch {
   private flushPromise: Promise<void> = Promise.resolve();
 
   constructor(
-    config: Pick<FlareLogConfig, "batchSize" | "flushIntervalMs" | "debug" | "endpoint">,
+    config: Pick<FlareLogConfig, "batchSize" | "flushIntervalMs" | "debug" | "endpoint" | "maxBatchSize" | "workerMode">,
     apiKey: string,
     _project: string
   ) {
+    const isWorker = config.workerMode ?? false;
     this.config = {
-      batchSize: config.batchSize ?? 10,
-      flushIntervalMs: config.flushIntervalMs ?? 5000,
+      batchSize: config.batchSize ?? (isWorker ? 1 : 10),
+      flushIntervalMs: config.flushIntervalMs ?? (isWorker ? 0 : 5000),
       debug: config.debug ?? false,
       endpoint: (config.endpoint ?? "https://flarelog.dev").replace(/\/$/, ""),
+      maxBatchSize: config.maxBatchSize ?? 100,
+      workerMode: isWorker,
     };
     this.apiKey = apiKey;
     this.endpoint = this.config.endpoint;
@@ -39,6 +47,16 @@ export class LogBatch {
   add(log: QueuedLog): void {
     this.buffer.push(log);
 
+    // Worker mode: flush immediately, but cap buffer at maxBatchSize
+    if (this.config.workerMode) {
+      if (this.buffer.length >= this.config.maxBatchSize) {
+        this.flush();
+      } else {
+        this.flush();
+      }
+      return;
+    }
+
     if (this.buffer.length >= this.config.batchSize) {
       this.flush();
     } else {
@@ -46,8 +64,9 @@ export class LogBatch {
     }
   }
 
-  /** Schedule a flush after the interval */
+  /** Schedule a flush after the interval (only in normal mode) */
   private scheduleFlush(): void {
+    if (this.config.workerMode) return;
     if (this.flushTimer) return;
 
     this.flushTimer = setTimeout(() => {
@@ -70,7 +89,7 @@ export class LogBatch {
         await this.sendBatch(batch);
       } catch (err) {
         // On failure, put logs back (up to max buffer size)
-        const remaining = this.config.batchSize * 3;
+        const remaining = this.config.maxBatchSize;
         this.buffer = [...batch, ...this.buffer].slice(0, remaining);
 
         if (this.config.debug) {

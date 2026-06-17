@@ -90,6 +90,36 @@ describe("worker capture", () => {
     expect(logs.some((l) => typeof l.metadata?.traceId === "string")).toBe(true);
   });
 
+  it("degrades gracefully when ctx.waitUntil is missing", async () => {
+    const handler = logger.workerFetch(async () => new Response("ok", { status: 200 }));
+
+    const request = new Request("https://example.com/health");
+    const ctx = {}; // no waitUntil
+
+    const response = await handler(request, {}, ctx);
+    expect(response.status).toBe(200);
+
+    // Should not throw and logs should still be flushed (via fallback await)
+    const logs = await flushAndGetLogs(logger, fetchMock);
+    expect(logs.some((l) => l.message === "Worker request completed")).toBe(true);
+    expect(logs.some((l) => (l.metadata?.status as number) === 200)).toBe(true);
+  });
+
+  it("degrades gracefully when ctx.waitUntil is missing on error", async () => {
+    const handler = logger.workerFetch(async () => {
+      throw new Error("boom");
+    });
+
+    const request = new Request("https://example.com/");
+    const ctx = {}; // no waitUntil
+
+    await expect(handler(request, {}, ctx)).rejects.toThrow("boom");
+
+    // Should not throw and error logs should still be flushed (via fallback await)
+    const logs = await flushAndGetLogs(logger, fetchMock);
+    expect(logs.some((l) => l.message === "Worker request failed")).toBe(true);
+  });
+
   it("captures Web Worker errors", async () => {
     class FakeWorker extends EventTarget {
       constructor(_scriptURL: string | URL, _options?: WorkerOptions) {

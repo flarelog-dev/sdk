@@ -54,7 +54,11 @@ export function workerFetch<T = Response>(
         status,
       });
 
-      ctx.waitUntil(logger.flush());
+      if (typeof ctx.waitUntil === 'function') {
+        ctx.waitUntil(logger.flush());
+      } else {
+        await logger.flush();
+      }
       return result;
     } catch (err) {
       const duration = Date.now() - start;
@@ -63,7 +67,11 @@ export function workerFetch<T = Response>(
         metadata: { durationMs: duration, url: request.url },
       });
 
-      ctx.waitUntil(logger.flush());
+      if (typeof ctx.waitUntil === 'function') {
+        ctx.waitUntil(logger.flush());
+      } else {
+        await logger.flush();
+      }
       throw err;
     }
   };
