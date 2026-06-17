@@ -15,7 +15,19 @@ export default {
 };
 ```
 
-The `flarelog()` factory auto-detects environment and enables console/globalErrors/rejections capture by default.
+The `flarelog()` factory auto-detects environment and enables console/globalErrors/rejections capture by default. For Cloudflare Workers, it automatically applies worker-optimized settings (`batchSize: 1`, `flushIntervalMs: 0`) to prevent log loss on short-lived executions.
+
+## Worker Mode
+
+When `workerMode: true` is set (or auto-detected), the SDK uses aggressive flushing optimized for the Workers runtime:
+
+- **batchSize: 1** — Flush immediately on every log
+- **flushIntervalMs: 0** — No timer-based flushing (Workers may not live long enough)
+- **maxBatchSize: 100** — Cap in-flight buffer for burst protection
+- **Automatic ctx.waitUntil** — `workerFetch()` and `withRequest()` guarantee delivery via `ctx.waitUntil()` on completion
+- **Graceful fallback** — If `ctx.waitUntil` is unavailable (e.g., tests), falls back to blocking `await logger.flush()`
+
+This ensures logs are never lost due to Worker cold starts or short execution times, while still batching efficiently within a single request's lifetime.
 
 ## Simple Worker (No Framework)
 
@@ -149,6 +161,13 @@ const logger = new FlareLog({
 
 export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    const logger = new FlareLog({
+      apiKey: env.FLARELOG_API_KEY,
+      project: "cron-worker",
+      environment: "production",
+      workerMode: true, // Enable worker-optimized batching
+    });
+    
     logger.info("Cron job started", {
       cron: event.cron,
       scheduledTime: event.scheduledTime,
@@ -179,6 +198,13 @@ const logger = new FlareLog({
 
 export default {
   async queue(batch: MessageBatch, env: Env, ctx: ExecutionContext) {
+    const logger = new FlareLog({
+      apiKey: env.FLARELOG_API_KEY,
+      project: "queue-worker",
+      environment: "production",
+      workerMode: true, // Enable worker-optimized batching
+    });
+    
     logger.info("Processing queue batch", {
       queue: batch.queue,
       messageCount: batch.messages.length,
@@ -365,13 +391,14 @@ const logger = new FlareLog({
 
 ## Best Practices
 
-1. **Always flush**: Use `ctx.waitUntil(logger.flush())` in Cloudflare Workers
-2. **Set trace IDs**: Pass trace IDs between workers for distributed tracing
-3. **Use child loggers**: Create child loggers per request for context
-4. **Add breadcrumbs**: Track user actions leading to errors
-5. **Set user context**: Identify affected users for faster debugging
-6. **Configure autoCapture**: Enable console, globalErrors, and rejections
-7. **Use beforeSend**: Scrub PII before sending logs
+1. **Use workerFetch() or withRequest()**: These handle flushing automatically with `ctx.waitUntil()` guarantee
+2. **Set workerMode for non-HTTP handlers**: For Cron, Queues, or manual handlers, set `workerMode: true` to prevent log loss
+3. **Set trace IDs**: Pass trace IDs between workers for distributed tracing
+4. **Use child loggers**: Create child loggers per request for context
+5. **Add breadcrumbs**: Track user actions leading to errors
+6. **Set user context**: Identify affected users for faster debugging
+7. **Configure autoCapture**: Enable console, globalErrors, and rejections
+8. **Use beforeSend**: Scrub PII before sending logs
 
 ## Error Handling Patterns
 

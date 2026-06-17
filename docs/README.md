@@ -108,6 +108,10 @@ const logger = flarelog({
 | `environment` | string | auto-detected | Environment name |
 | `release` | string | auto-detected | Release version |
 | `serverName` | string | auto-detected | Server identifier |
+| `batchSize` | number | `10` (Node), `1` (Worker) | Logs to batch before sending |
+| `flushIntervalMs` | number | `5000` (Node), `0` (Worker) | Max time before flushing |
+| `maxBatchSize` | number | `100` | Max in-flight buffer size |
+| `workerMode` | boolean | `false` | Enable worker-optimized batching |
 | `sampleRate` | number | `1.0` | Log sampling rate (0-1) |
 | `beforeSend` | function | - | Modify/drop logs before sending |
 | `autoCapture` | object | `{console, globalErrors, rejections}` | Auto-capture config |

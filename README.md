@@ -123,8 +123,10 @@ const logger = flarelog({
 | `environment` | `string` | auto-detected | Environment name |
 | `release` | `string` | auto-detected | Release version |
 | `serverName` | `string` | auto-detected | Server identifier |
-| `batchSize` | `number` | `10` | Logs to batch before sending |
-| `flushIntervalMs` | `number` | `5000` | Max time before flushing |
+| `batchSize` | `number` | `10` (Node), `1` (Worker) | Logs to batch before sending |
+| `flushIntervalMs` | `number` | `5000` (Node), `0` (Worker) | Max time before flushing |
+| `maxBatchSize` | `number` | `100` | Max in-flight buffer size |
+| `workerMode` | `boolean` | `false` | Enable worker-optimized batching |
 | `debug` | `boolean` | `false` | Enable SDK debug logging |
 | `defaultSource` | `string` | `""` | Default source tag for logs |
 | `sampleRate` | `number` | `1.0` | Log sampling rate (0-1) |
@@ -185,7 +187,7 @@ requestLogger.error("Payment failed", { reason: "insufficient_funds" });
 Logs are batched automatically, but you can force a flush:
 
 ```typescript
-// Flush before worker exits
+// Flush before worker exits (automatic in workerFetch, but available for manual use)
 ctx.waitUntil(logger.flush());
 
 // Or in Node.js before shutdown
@@ -193,6 +195,8 @@ process.on("beforeExit", async () => {
   await logger.flush();
 });
 ```
+
+**Note for Workers**: When using `workerFetch()` or `withRequest()`, flushing is handled automatically. The SDK flushes logs at each await boundary and guarantees delivery via `ctx.waitUntil()` on completion. If `ctx.waitUntil` is not available (e.g., in tests), the SDK falls back to a blocking flush.
 
 ## Advanced: Raw Log Entries
 
