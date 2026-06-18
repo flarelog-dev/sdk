@@ -1,6 +1,6 @@
 {
   "name": "@flarelog/sdk",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Zero-config logging SDK for Cloudflare Workers and Node.js. Send logs to FlareLog with minimal setup.",
   "keywords": [
     "logging",
@@ -82,12 +82,22 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/frameworks/*.ts --format esm,cjs --dts --clean",
+    "build": "tsup",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"
