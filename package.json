@@ -1,6 +1,6 @@
 {
   "name": "@flarelog/sdk",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Zero-config logging SDK for Cloudflare Workers and Node.js. Send logs to FlareLog with minimal setup.",
   "keywords": [
     "logging",
@@ -65,6 +65,16 @@
       "import": {
         "types": "./dist/frameworks/react.d.ts",
         "default": "./dist/frameworks/react.js"
+      }
+    },
+    "./tanstack-start": {
+      "import": {
+        "types": "./dist/frameworks/tanstack-start.d.ts",
+        "default": "./dist/frameworks/tanstack-start.js"
+      },
+      "require": {
+        "types": "./dist/frameworks/tanstack-start.d.cts",
+        "default": "./dist/frameworks/tanstack-start.cjs"
       }
     },
     "./cf-workers": {

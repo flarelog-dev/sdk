@@ -8,6 +8,7 @@ export default defineConfig({
     'src/frameworks/hono.ts',
     'src/frameworks/next.ts',
     'src/frameworks/cf-workers.ts',
+    'src/frameworks/tanstack-start.ts',
   ],
   format: ['esm', 'cjs'],
   dts: true,

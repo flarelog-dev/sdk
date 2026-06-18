@@ -7,7 +7,7 @@ Zero-config logging SDK for Cloudflare Workers, Node.js, and any JavaScript runt
 - **Cloudflare Workers first** — Works seamlessly in edge environments
 - **Zero config** — Just an API key
 - **Auto-detection** — Environment, release, and server name detected automatically
-- **Framework integrations** — Express, Hono, Next.js, React, and more
+- **Framework integrations** — Express, Hono, Next.js, React, TanStack Start, and more
 - **Structured logging** — Attach metadata to every log entry
 - **Automatic batching** — Efficient log transmission with configurable batch size
 - **Log levels** — TRACE, DEBUG, INFO, WARN, ERROR, FATAL with level filtering
@@ -216,6 +216,7 @@ logger.logRaw({
 - [Cloudflare Workers Guide](./docs/cloudflare-workers.md) - Workers, Durable Objects, Queues, R2, KV
 - [Browser Guide](./docs/browser-guide.md) - React, Vue, Next.js, Svelte, Web Vitals
 - [Node.js Guide](./docs/nodejs-guide.md) - Express, Fastify, NestJS, Koa
+- [TanStack Start Guide](./docs/tanstack-start.md) - TanStack Start middleware and API routes
 - [Advanced Features](./docs/advanced-features.md) - Breadcrumbs, tags, beforeSend, sampleRate
 
 ## License
