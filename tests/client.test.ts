@@ -4,7 +4,6 @@ import { FlareLog } from "../src/client";
 function createLogger(config: Record<string, unknown> = {}) {
   return new FlareLog({
     apiKey: "test",
-    project: "test",
     batchSize: 100,
     flushIntervalMs: 10000,
     ...config,

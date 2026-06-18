@@ -6,7 +6,7 @@
 import { flarelog } from "@flarelog/sdk";
 import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, });
 
 app.use(expressMiddleware(logger));
 app.use(expressErrorHandler(logger));
@@ -21,7 +21,7 @@ import express from "express";
 import { flarelog } from "@flarelog/sdk";
 import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, });
 
 const app = express();
 
@@ -62,7 +62,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "fastify-api",
   environment: process.env.NODE_ENV,
   autoCapture: {
     console: true,
@@ -136,7 +135,6 @@ export class FlareLogService {
   constructor() {
     this.logger = new FlareLog({
       apiKey: process.env.FLARELOG_API_KEY!,
-      project: "nestjs-app",
       environment: process.env.NODE_ENV,
       autoCapture: {
         console: true,
@@ -300,7 +298,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "koa-api",
   environment: process.env.NODE_ENV,
   autoCapture: {
     console: true,
@@ -367,7 +364,6 @@ import { Queue, Worker } from "bullmq";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "worker-app",
   environment: process.env.NODE_ENV,
 });
 
@@ -416,7 +412,6 @@ import { Command } from "commander";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "cli-tool",
   environment: "cli",
   serverName: require("os").hostname(),
 });
@@ -448,7 +443,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "node-app",
 });
 
 // Graceful shutdown
@@ -494,7 +488,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "prisma-app",
 });
 
 const prisma = new PrismaClient();
@@ -560,7 +553,6 @@ jest.mock("@flarelog/sdk", () => ({
 // Or use a test transport
 const testLogger = new FlareLog({
   apiKey: "test-key",
-  project: "test",
   endpoint: "http://localhost:9999", // Mock server
 });
 ```
@@ -580,7 +572,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 export const logger = new FlareLog({
   apiKey: process.env.FLARELOG_API_KEY!,
-  project: "my-app",
   environment: process.env.FLARELOG_ENVIRONMENT,
   release: process.env.FLARELOG_RELEASE,
   serverName: require("os").hostname(),

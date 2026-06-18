@@ -29,7 +29,7 @@ interface Next {
  * import { flarelog } from "@flarelog/sdk";
  * import { honoMiddleware } from "@flarelog/sdk/hono";
  * 
- * const logger = flarelog({ apiKey, project: "api" });
+ * const logger = flarelog({ apiKey, });
  * app.use("*", honoMiddleware(logger));
  * ```
  */

@@ -13,7 +13,7 @@ npm install @flarelog/sdk
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "my-worker" });
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
 
 export default {
   fetch: workerFetch(logger, async (request, env, ctx) => {
@@ -29,7 +29,7 @@ export default {
 import { flarelog } from "@flarelog/sdk";
 import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, });
 
 app.use(expressMiddleware(logger));
 app.use(expressErrorHandler(logger));
@@ -41,7 +41,7 @@ app.use(expressErrorHandler(logger));
 import { flarelog } from "@flarelog/sdk";
 import { honoMiddleware } from "@flarelog/sdk/hono";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "api" });
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
 
 app.use("*", honoMiddleware(logger));
 ```
@@ -52,7 +52,7 @@ app.use("*", honoMiddleware(logger));
 import { flarelog } from "@flarelog/sdk";
 import { withFlareLog } from "@flarelog/sdk/next";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, project: "api" });
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, });
 
 export default withFlareLog(logger, async (req, res) => {
   req.logger.info("Processing request");
@@ -66,7 +66,7 @@ export default withFlareLog(logger, async (req, res) => {
 import { flarelog } from "@flarelog/sdk";
 import { FlareLogErrorBoundary, useFlareLog } from "@flarelog/sdk/react";
 
-const logger = flarelog({ apiKey: process.env.REACT_APP_FLARELOG_API_KEY, project: "web" });
+const logger = flarelog({ apiKey: process.env.REACT_APP_FLARELOG_API_KEY, });
 
 // Error Boundary
 <FlareLogErrorBoundary logger={logger}>
@@ -92,7 +92,6 @@ import { flarelog } from "@flarelog/sdk";
 
 const logger = flarelog({
   apiKey: "fl_your_api_key",
-  project: "my-app",
   // Everything else is auto-detected!
 });
 ```
@@ -102,7 +101,6 @@ const logger = flarelog({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `apiKey` | string | required | Your FlareLog API key |
-| `project` | string | required | Project identifier |
 | `endpoint` | string | `https://flarelog.dev/api` | API endpoint |
 | `level` | LogLevel | `DEBUG` | Minimum log level |
 | `environment` | string | auto-detected | Environment name |

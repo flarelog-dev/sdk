@@ -9,7 +9,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "my-app",
 });
 
 // Add breadcrumbs manually
@@ -337,7 +336,6 @@ import { FlareLog } from "@flarelog/sdk";
 const logger = new FlareLog({
   // Required
   apiKey: "fl_your_api_key",
-  project: "my-app",
   
   // Optional
   endpoint: "https://flarelog.dev/api",

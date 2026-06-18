@@ -5,7 +5,6 @@ import { wrapWorker } from "../src/workers";
 function createLogger() {
   return new FlareLog({
     apiKey: "test",
-    project: "test",
     batchSize: 100,
     flushIntervalMs: 10000,
   });

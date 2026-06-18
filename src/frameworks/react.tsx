@@ -19,7 +19,7 @@ interface ErrorBoundaryState {
  * import { flarelog } from "@flarelog/sdk";
  * import { FlareLogErrorBoundary } from "@flarelog/sdk/react";
  * 
- * const logger = flarelog({ apiKey, project: "web" });
+ * const logger = flarelog({ apiKey, });
  * 
  * <FlareLogErrorBoundary logger={logger} fallback={<ErrorPage />}>
  *   <App />

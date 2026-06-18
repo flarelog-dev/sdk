@@ -5,7 +5,7 @@
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "my-worker" });
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
 
 export default {
   fetch: workerFetch(logger, async (request, env, ctx) => {
@@ -34,7 +34,7 @@ This ensures logs are never lost due to Worker cold starts or short execution ti
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "my-worker" });
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
 
 export default {
   fetch: workerFetch(logger, async (request, env, ctx) => {
@@ -59,7 +59,7 @@ import { Hono } from "hono";
 import { flarelog } from "@flarelog/sdk";
 import { honoMiddleware } from "@flarelog/sdk/hono";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "hono-app" });
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
 
 const app = new Hono();
 
@@ -97,7 +97,7 @@ export default app;
 import { Router } from "itty-router";
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "itty-app" });
+const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
 
 const router = Router();
 
@@ -123,7 +123,6 @@ export class ChatRoom extends DurableObject {
     
     this.logger = new FlareLog({
       apiKey: env.FLARELOG_API_KEY,
-      project: "chat-app",
       environment: "production",
       serverName: `do-${ctx.id.toString()}`,
     });
@@ -155,7 +154,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "cron-worker",
   environment: "production",
 });
 
@@ -163,7 +161,6 @@ export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     const logger = new FlareLog({
       apiKey: env.FLARELOG_API_KEY,
-      project: "cron-worker",
       environment: "production",
       workerMode: true, // Enable worker-optimized batching
     });
@@ -192,7 +189,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "queue-worker",
   environment: "production",
 });
 
@@ -200,7 +196,6 @@ export default {
   async queue(batch: MessageBatch, env: Env, ctx: ExecutionContext) {
     const logger = new FlareLog({
       apiKey: env.FLARELOG_API_KEY,
-      project: "queue-worker",
       environment: "production",
       workerMode: true, // Enable worker-optimized batching
     });
@@ -236,7 +231,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "r2-worker",
   environment: "production",
 });
 
@@ -276,7 +270,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "kv-worker",
   environment: "production",
 });
 
@@ -319,7 +312,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  project: "api-gateway",
   environment: "production",
 });
 
@@ -383,7 +375,6 @@ interface Env {
 // main.ts
 const logger = new FlareLog({
   apiKey: env.FLARELOG_API_KEY,
-  project: "my-worker",
   environment: env.FLARELOG_ENVIRONMENT,
   release: env.FLARELOG_RELEASE,
 });

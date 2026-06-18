@@ -25,7 +25,7 @@ interface NextApiResponse {
  * import { flarelog } from "@flarelog/sdk";
  * import { withFlareLog } from "@flarelog/sdk/next";
  * 
- * const logger = flarelog({ apiKey, project: "api" });
+ * const logger = flarelog({ apiKey, });
  * 
  * export default withFlareLog(logger, async (req, res) => {
  *   req.logger.info("Processing request");

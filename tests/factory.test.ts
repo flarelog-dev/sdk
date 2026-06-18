@@ -18,12 +18,12 @@ describe("flarelog factory", () => {
   });
 
   it("creates logger with auto-detected environment", () => {
-    const logger = flarelog({ apiKey: "test", project: "test" });
+    const logger = flarelog({ apiKey: "test", });
     expect(logger).toBeDefined();
   });
 
   it("enables auto-capture by default", async () => {
-    const logger = flarelog({ apiKey: "test", project: "test", batchSize: 100 });
+    const logger = flarelog({ apiKey: "test", batchSize: 100 });
     
     // Console capture should be enabled by default
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -41,7 +41,6 @@ describe("flarelog factory", () => {
   it("allows overriding auto-capture defaults", () => {
     const logger = flarelog({
       apiKey: "test",
-      project: "test",
       autoCapture: { console: false },
     });
     

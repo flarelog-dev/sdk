@@ -5,7 +5,7 @@
 ```typescript
 import { flarelog } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: "fl_your_api_key", project: "my-website" });
+const logger = flarelog({ apiKey: "fl_your_api_key", });
 
 logger.info("Page loaded", { url: window.location.href });
 ```
@@ -20,7 +20,6 @@ The `flarelog()` factory auto-detects environment and enables console/globalErro
   
   const logger = flarelog({
     apiKey: "fl_your_api_key",
-    project: "my-website",
     autoCapture: {
       console: true,
       globalErrors: true,
@@ -50,7 +49,6 @@ import { flarelog } from "@flarelog/sdk";
 
 export const logger = flarelog({
   apiKey: process.env.REACT_APP_FLARELOG_API_KEY!,
-  project: "react-app",
   release: process.env.REACT_APP_VERSION,
   autoCapture: {
     console: true,
@@ -202,7 +200,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: import.meta.env.VITE_FLARELOG_API_KEY,
-  project: "vue-app",
   environment: import.meta.env.MODE,
   autoCapture: {
     console: true,
@@ -267,7 +264,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 export const logger = new FlareLog({
   apiKey: process.env.NEXT_PUBLIC_FLARELOG_API_KEY!,
-  project: "nextjs-app",
   environment: process.env.NODE_ENV,
   release: process.env.VERCEL_GIT_COMMIT_SHA || "dev",
   serverName: typeof window === "undefined" ? "server" : "client",
@@ -375,7 +371,6 @@ import { FlareLog } from "@flarelog/sdk";
 
 export const logger = new FlareLog({
   apiKey: import.meta.env.VITE_FLARELOG_API_KEY,
-  project: "svelte-app",
   environment: import.meta.env.MODE,
   autoCapture: {
     console: true,

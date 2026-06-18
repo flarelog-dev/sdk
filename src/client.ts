@@ -26,7 +26,6 @@ import { DedupTracker } from "./dedup";
  * ```ts
  * const logger = new FlareLog({
  *   apiKey: "lf_your_api_key",
- *   project: "my-worker",
  *   environment: "production",
  *   release: "1.2.3",
  * });
@@ -73,9 +72,6 @@ export class FlareLog {
     if (!config.apiKey) {
       throw new Error("[FlareLog] apiKey is required");
     }
-    if (!config.project) {
-      throw new Error("[FlareLog] project is required");
-    }
 
     this.config = {
       endpoint: config.endpoint ?? "https://flarelog.dev/api",
@@ -86,7 +82,6 @@ export class FlareLog {
       defaultSource: config.defaultSource ?? "",
       includeTimestamps: config.includeTimestamps ?? true,
       apiKey: config.apiKey,
-      project: config.project,
       autoCapture: config.autoCapture ?? {},
       environment: config.environment ?? "development",
       release: config.release ?? "",
@@ -113,8 +108,7 @@ export class FlareLog {
         maxBatchSize: this.config.maxBatchSize,
         workerMode: this.config.workerMode,
       },
-      this.config.apiKey,
-      this.config.project
+      this.config.apiKey
     );
 
     if (this.config.autoCapture.console) {

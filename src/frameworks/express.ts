@@ -31,7 +31,7 @@ interface NextFunction {
  * import { flarelog } from "@flarelog/sdk";
  * import { expressMiddleware } from "@flarelog/sdk/express";
  * 
- * const logger = flarelog({ apiKey, project: "api" });
+ * const logger = flarelog({ apiKey, });
  * app.use(expressMiddleware(logger));
  * ```
  */

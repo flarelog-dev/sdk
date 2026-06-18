@@ -13,7 +13,7 @@ import type { WorkerFetchHandler } from "../types";
  * ```typescript
  * import { flarelog, workerFetch } from "@flarelog/sdk";
  * 
- * const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, project: "my-worker" });
+ * const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
  * 
  * export default {
  *   fetch: workerFetch(logger, async (request, env, ctx) => {

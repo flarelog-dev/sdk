@@ -50,7 +50,6 @@ function detectEnvironment(): Partial<FlareLogConfig> {
  * 
  * const logger = flarelog({
  *   apiKey: env.FLARELOG_API_KEY,
- *   project: "my-worker",
  * });
  * // Auto-detects: environment, release, serverName
  * // Auto-enables: console, globalErrors, rejections capture

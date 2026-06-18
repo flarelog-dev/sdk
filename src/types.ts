@@ -55,8 +55,6 @@ export interface Breadcrumb {
 export interface FlareLogConfig {
   /** Your FlareLog API key */
   apiKey: string;
-  /** Project slug to send logs to */
-  project: string;
   /** FlareLog API endpoint. Defaults to https://flarelog.dev/api */
   endpoint?: string;
   /** Minimum log level to send. Defaults to "DEBUG" */

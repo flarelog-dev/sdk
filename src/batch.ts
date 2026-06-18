@@ -27,8 +27,7 @@ export class LogBatch {
 
   constructor(
     config: Pick<FlareLogConfig, "batchSize" | "flushIntervalMs" | "debug" | "endpoint" | "maxBatchSize" | "workerMode">,
-    apiKey: string,
-    _project: string
+    apiKey: string
   ) {
     const isWorker = config.workerMode ?? false;
     this.config = {
