@@ -50,6 +50,32 @@ export interface Breadcrumb {
 }
 
 /**
+ * Resolved configuration with all defaults applied.
+ * This is the concrete type used internally, not Required<FlareLogConfig>.
+ */
+export interface ResolvedConfig {
+  apiKey: string;
+  endpoint: string;
+  allowInsecure: boolean;
+  level: LogLevel;
+  batchSize: number;
+  flushIntervalMs: number;
+  debug: boolean;
+  defaultSource: string;
+  includeTimestamps: boolean;
+  autoCapture: AutoCaptureConfig;
+  environment: string;
+  release: string;
+  serverName: string;
+  beforeSend: (log: LogEntry) => LogEntry | false;
+  scrubFields: string[];
+  sampleRate: number;
+  maxBatchSize: number;
+  onDrop: (droppedCount: number) => void;
+  workerMode: boolean;
+}
+
+/**
  * Configuration options for the FlareLog client
  */
 export interface FlareLogConfig {
@@ -57,6 +83,8 @@ export interface FlareLogConfig {
   apiKey: string;
   /** FlareLog API endpoint. Defaults to https://flarelog.dev/api */
   endpoint?: string;
+  /** Allow insecure HTTP endpoints (not recommended). Defaults to false */
+  allowInsecure?: boolean;
   /** Minimum log level to send. Defaults to "DEBUG" */
   level?: LogLevel;
   /** Number of logs to batch before sending. Defaults to 10 (Node), 1 (Worker) */
@@ -79,10 +107,14 @@ export interface FlareLogConfig {
   serverName?: string;
   /** Callback to modify or drop logs before sending. Return false to drop. */
   beforeSend?: (log: LogEntry) => LogEntry | false;
+  /** Fields to scrub from metadata (PII redaction). Defaults to common sensitive fields. */
+  scrubFields?: string[];
   /** Sample rate for logs (0.0 to 1.0). Defaults to 1.0 (100%) */
   sampleRate?: number;
   /** Max in-flight buffer size. Defaults to 100 */
   maxBatchSize?: number;
+  /** Callback invoked when logs are dropped due to buffer overflow. Receives the dropped log count. */
+  onDrop?: (droppedCount: number) => void;
   /** Worker mode: auto-detects if not set. When true, flushes immediately with no timer. */
   workerMode?: boolean;
 }

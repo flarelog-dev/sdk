@@ -117,6 +117,7 @@ const logger = flarelog({
 |--------|------|---------|-------------|
 | `apiKey` | `string` | **required** | Your FlareLog API key |
 | `endpoint` | `string` | `https://flarelog.dev/api` | FlareLog API endpoint |
+| `allowInsecure` | `boolean` | `false` | Allow HTTP endpoints (not recommended) |
 | `level` | `LogLevel` | `"DEBUG"` | Minimum log level to send |
 | `environment` | `string` | auto-detected | Environment name |
 | `release` | `string` | auto-detected | Release version |
@@ -129,6 +130,8 @@ const logger = flarelog({
 | `defaultSource` | `string` | `""` | Default source tag for logs |
 | `sampleRate` | `number` | `1.0` | Log sampling rate (0-1) |
 | `beforeSend` | `function` | - | Modify/drop logs before sending |
+| `scrubFields` | `string[]` | common PII fields | Fields to redact from metadata |
+| `onDrop` | `function` | - | Callback when logs are dropped |
 | `autoCapture` | `object` | `{console, globalErrors, rejections}` | Auto-capture config |
 
 ## Log Levels

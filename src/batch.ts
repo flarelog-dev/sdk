@@ -7,6 +7,7 @@ interface BatchConfig {
   debug: boolean;
   endpoint: string;
   maxBatchSize: number;
+  onDrop: (droppedCount: number) => void;
   workerMode: boolean;
 }
 
@@ -46,13 +47,9 @@ export class LogBatch {
   add(log: QueuedLog): void {
     this.buffer.push(log);
 
-    // Worker mode: flush immediately, but cap buffer at maxBatchSize
+    // Worker mode: flush immediately on every log (no batching)
     if (this.config.workerMode) {
-      if (this.buffer.length >= this.config.maxBatchSize) {
-        this.flush();
-      } else {
-        this.flush();
-      }
+      this.flush();
       return;
     }
 
@@ -88,18 +85,40 @@ export class LogBatch {
         await this.sendBatch(batch);
       } catch (err) {
         // On failure, put logs back (up to max buffer size)
-        const remaining = this.config.maxBatchSize;
-        this.buffer = [...batch, ...this.buffer].slice(0, remaining);
+        const combined = [...batch, ...this.buffer];
+        const dropped = combined.length - this.config.maxBatchSize;
+        this.buffer = combined.slice(0, this.config.maxBatchSize);
+
+        if (dropped > 0 && this.config.onDrop) {
+          this.config.onDrop(dropped);
+        }
 
         if (this.config.debug) {
           runWithHookSkipped(() => {
             console.error("[FlareLog] Failed to send logs:", err);
+            if (dropped > 0) {
+              console.warn(`[FlareLog] Dropped ${dropped} logs due to buffer overflow`);
+            }
           });
         }
       }
     });
 
-    return this.flushPromise;
+    const currentPromise = this.flushPromise;
+    
+    // Reset the chain after this flush completes to prevent unbounded memory growth
+    currentPromise.then(() => {
+      if (this.flushPromise === currentPromise) {
+        this.flushPromise = Promise.resolve();
+      }
+    }).catch(() => {
+      // Even on error, reset to prevent stuck promises
+      if (this.flushPromise === currentPromise) {
+        this.flushPromise = Promise.resolve();
+      }
+    });
+
+    return currentPromise;
   }
 
   /** Send a batch of logs to the ingestion endpoint */
@@ -109,9 +128,9 @@ export class LogBatch {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
-        apiKey: this.apiKey,
         logs: logs.map((log) => ({
           timestamp: log.timestamp,
           level: log.level,

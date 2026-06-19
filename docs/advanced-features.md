@@ -126,6 +126,65 @@ const logger = new FlareLog({
 });
 ```
 
+## PII Scrubbing (GDPR Compliance)
+
+Automatically redact sensitive fields from metadata to prevent PII leakage.
+
+```typescript
+import { FlareLog } from "@flarelog/sdk";
+
+const logger = new FlareLog({
+  apiKey: "fl_your_api_key",
+  // Uses default scrub list: password, token, email, name, ssn, etc.
+  scrubFields: ["password", "secret", "token", "email"],
+});
+
+logger.info("User signed up", {
+  email: "user@example.com",  // → "[REDACTED]"
+  name: "John",               // → "[REDACTED]"
+  userId: "123",              // → "123" (kept)
+});
+```
+
+**Default scrub fields:** `password`, `secret`, `token`, `apiKey`, `authorization`, `email`, `phone`, `name`, `ssn`, `credit_card`, etc.
+
+## Handling Dropped Logs
+
+Get notified when logs are dropped due to buffer overflow.
+
+```typescript
+const logger = new FlareLog({
+  apiKey: "fl_your_api_key",
+  maxBatchSize: 100,
+  onDrop: (droppedCount) => {
+    console.warn(`Dropped ${droppedCount} logs`);
+    // Increment your monitoring metric here
+  },
+});
+```
+
+## Secure Endpoints
+
+Only HTTPS endpoints are allowed by default to prevent accidental plaintext transmission of sensitive data.
+
+```typescript
+// ✅ Allowed (default HTTPS)
+const logger = new FlareLog({ apiKey: "..." });
+
+// ✅ Allowed (localhost)
+const logger = new FlareLog({ apiKey: "...", endpoint: "http://localhost:9999" });
+
+// ❌ Blocked
+const logger = new FlareLog({ apiKey: "...", endpoint: "http://internal.corp" });
+
+// ✅ Allowed (explicit opt-in)
+const logger = new FlareLog({
+  apiKey: "...",
+  endpoint: "http://internal.corp",
+  allowInsecure: true,
+});
+```
+
 ## Sample Rate
 
 Control log volume and costs.

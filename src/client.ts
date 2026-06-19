@@ -56,7 +56,7 @@ import { DedupTracker } from "./dedup";
  * ```
  */
 export class FlareLog {
-  private config: Required<FlareLogConfig>;
+  private config: ResolvedConfig;
   private batch: LogBatch;
   private dedup: DedupTracker;
   private consoleCleanup?: () => void;
@@ -73,8 +73,19 @@ export class FlareLog {
       throw new Error("[FlareLog] apiKey is required");
     }
 
+    const endpoint = config.endpoint ?? "https://flarelog.dev/api";
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(endpoint);
+    
+    if (endpoint.startsWith("http://") && !isLocalhost && !config.allowInsecure) {
+      throw new Error(
+        `[FlareLog] Insecure HTTP endpoint detected: ${endpoint}\n` +
+        `For security, only HTTPS endpoints are allowed.\n` +
+        `Use "allowInsecure: true" to explicitly allow HTTP (not recommended).`
+      );
+    }
+
     this.config = {
-      endpoint: config.endpoint ?? "https://flarelog.dev/api",
+      endpoint,
       level: config.level ?? "DEBUG",
       batchSize: config.batchSize ?? (config.workerMode ? 1 : 10),
       flushIntervalMs: config.flushIntervalMs ?? (config.workerMode ? 0 : 5000),
@@ -82,13 +93,37 @@ export class FlareLog {
       defaultSource: config.defaultSource ?? "",
       includeTimestamps: config.includeTimestamps ?? true,
       apiKey: config.apiKey,
+      allowInsecure: config.allowInsecure ?? false,
       autoCapture: config.autoCapture ?? {},
       environment: config.environment ?? "development",
       release: config.release ?? "",
       serverName: config.serverName ?? "",
       beforeSend: config.beforeSend ?? ((log: LogEntry) => log),
+      scrubFields: config.scrubFields ?? [
+        "password",
+        "secret",
+        "token",
+        "apiKey",
+        "api_key",
+        "authorization",
+        "auth",
+        "cookie",
+        "session",
+        "credit_card",
+        "creditCard",
+        "ssn",
+        "email",
+        "phone",
+        "address",
+        "name",
+        "firstName",
+        "lastName",
+        "dob",
+        "birthdate",
+      ],
       sampleRate: config.sampleRate ?? 1.0,
       maxBatchSize: config.maxBatchSize ?? 100,
+      onDrop: config.onDrop ?? (() => {}),
       workerMode: config.workerMode ?? false,
     };
 
@@ -106,6 +141,7 @@ export class FlareLog {
         debug: this.config.debug,
         endpoint: this.config.endpoint,
         maxBatchSize: this.config.maxBatchSize,
+        onDrop: this.config.onDrop,
         workerMode: this.config.workerMode,
       },
       this.config.apiKey
@@ -254,7 +290,7 @@ export class FlareLog {
   async capture<T>(
     fn: () => Promise<T> | T,
     opts?: CaptureOptions
-  ): Promise<T> {
+  ): Promise<T | undefined> {
     try {
       return await fn();
     } catch (err) {
@@ -270,11 +306,11 @@ export class FlareLog {
         throw err;
       }
 
-      return undefined as T;
+      return undefined;
     }
   }
 
-  captureSync<T>(fn: () => T, opts?: CaptureOptions): T {
+  captureSync<T>(fn: () => T, opts?: CaptureOptions): T | undefined {
     try {
       return fn();
     } catch (err) {
@@ -290,7 +326,7 @@ export class FlareLog {
         throw err;
       }
 
-      return undefined as T;
+      return undefined;
     }
   }
 
@@ -385,6 +421,9 @@ export class FlareLog {
    * Returns a cleanup function.
    */
   installConsoleHooks(opts?: ConsoleCaptureOptions): () => void {
+    // Clean up existing hooks first to prevent leaks
+    this.consoleCleanup?.();
+    
     const cleanup = installConsoleHooks(this, {
       ...opts,
       dedupWindowMs:
@@ -451,6 +490,7 @@ export class FlareLog {
         if (captureErrors) {
           const nodeOnError = (err: Error) => {
             this.captureAutomatic(err, "global", "Uncaught exception");
+            process.exit(1);
           };
           process.on("uncaughtException", nodeOnError);
           handlers.push(() => {
@@ -506,8 +546,10 @@ export class FlareLog {
 
   /**
    * Clean up resources. Call this when shutting down.
+   * Flushes pending logs before destroying.
    */
-  destroy(): void {
+  async destroy(): Promise<void> {
+    await this.flush();
     this.batch.destroy();
     this.consoleCleanup?.();
     this.globalCleanup?.();
@@ -574,34 +616,65 @@ export class FlareLog {
       // Ignore environment detection errors
     }
 
-    return enriched;
+    return this.scrubMetadata(enriched);
+  }
+
+  private scrubMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+    const scrubbed: Record<string, unknown> = {};
+    const scrubFields = this.config.scrubFields || [];
+
+    for (const [key, value] of Object.entries(metadata)) {
+      const shouldScrub = scrubFields.some(
+        (field) => key.toLowerCase().includes(field.toLowerCase())
+      );
+
+      if (shouldScrub) {
+        scrubbed[key] = "[REDACTED]";
+      } else if (value && typeof value === "object" && !Array.isArray(value)) {
+        scrubbed[key] = this.scrubMetadata(value as Record<string, unknown>);
+      } else {
+        scrubbed[key] = value;
+      }
+    }
+
+    return scrubbed;
   }
 
   private installHttpInstrumentation(): () => void {
     const handlers: Array<() => void> = [];
 
+    const sanitizeUrl = (url: string): string => {
+      try {
+        const parsed = new URL(url);
+        return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+      } catch {
+        return url.split('?')[0];
+      }
+    };
+
     try {
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+      const currentFetch = globalThis.fetch;
+      const wrappedFetch = async (...args: Parameters<typeof fetch>) => {
         const [url, init] = args;
         const start = Date.now();
         const method = init?.method ?? "GET";
         const urlString = typeof url === "string" ? url : url.toString();
+        const safeUrl = sanitizeUrl(urlString);
 
         this.addBreadcrumb({
           category: "http",
-          message: `${method} ${urlString}`,
-          data: { url: urlString, method },
+          message: `${method} ${safeUrl}`,
+          data: { url: safeUrl, method },
         });
 
         try {
-          const response = await originalFetch.apply(globalThis, args);
+          const response = await currentFetch.apply(globalThis, args);
           const duration = Date.now() - start;
 
           this.addBreadcrumb({
             category: "http",
-            message: `${method} ${urlString} - ${response.status}`,
-            data: { url: urlString, method, status: response.status, durationMs: duration },
+            message: `${method} ${safeUrl} - ${response.status}`,
+            data: { url: safeUrl, method, status: response.status, durationMs: duration },
           });
 
           return response;
@@ -610,17 +683,21 @@ export class FlareLog {
 
           this.addBreadcrumb({
             category: "http",
-            message: `${method} ${urlString} - failed`,
+            message: `${method} ${safeUrl} - failed`,
             level: "ERROR",
-            data: { url: urlString, method, error: (err as Error).message, durationMs: duration },
+            data: { url: safeUrl, method, error: (err as Error).message, durationMs: duration },
           });
 
           throw err;
         }
       };
 
+      globalThis.fetch = wrappedFetch;
+
       handlers.push(() => {
-        globalThis.fetch = originalFetch;
+        if (globalThis.fetch === wrappedFetch) {
+          globalThis.fetch = currentFetch;
+        }
       });
     } catch {
       // fetch not available
