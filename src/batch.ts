@@ -26,8 +26,8 @@ export class LogBatch {
   private endpoint: string;
   private flushPromise: Promise<void> = Promise.resolve();
 
-  constructor(
-    config: Pick<FlareLogConfig, "batchSize" | "flushIntervalMs" | "debug" | "endpoint" | "maxBatchSize" | "workerMode">,
+constructor(
+    config: Pick<FlareLogConfig, "batchSize" | "flushIntervalMs" | "debug" | "endpoint" | "maxBatchSize" | "workerMode" | "onDrop">,
     apiKey: string
   ) {
     const isWorker = config.workerMode ?? false;
@@ -37,6 +37,7 @@ export class LogBatch {
       debug: config.debug ?? false,
       endpoint: (config.endpoint ?? "https://flarelog.dev").replace(/\/$/, ""),
       maxBatchSize: config.maxBatchSize ?? 100,
+      onDrop: config.onDrop ?? (() => {}),
       workerMode: isWorker,
     };
     this.apiKey = apiKey;

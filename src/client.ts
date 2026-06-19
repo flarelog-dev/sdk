@@ -9,6 +9,7 @@ import type {
   WorkerFetchHandler,
   UserContext,
   Breadcrumb,
+  ResolvedConfig,
 } from "./types";
 import { LogBatch } from "./batch";
 import { shouldLog } from "./levels";
@@ -74,7 +75,7 @@ export class FlareLog {
     }
 
     const endpoint = config.endpoint ?? "https://flarelog.dev/api";
-    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(endpoint);
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?(\/.*)?$/i.test(endpoint);
     
     if (endpoint.startsWith("http://") && !isLocalhost && !config.allowInsecure) {
       throw new Error(
@@ -112,14 +113,6 @@ export class FlareLog {
         "credit_card",
         "creditCard",
         "ssn",
-        "email",
-        "phone",
-        "address",
-        "name",
-        "firstName",
-        "lastName",
-        "dob",
-        "birthdate",
       ],
       sampleRate: config.sampleRate ?? 1.0,
       maxBatchSize: config.maxBatchSize ?? 100,
@@ -485,12 +478,12 @@ export class FlareLog {
     }
 
     try {
-      const process = (globalThis as unknown as Record<string, unknown>).process as Record<string, unknown> | undefined;
+const process = (globalThis as unknown as Record<string, unknown>).process as Record<string, unknown> | undefined;
       if (process && typeof process.on === "function") {
         if (captureErrors) {
           const nodeOnError = (err: Error) => {
             this.captureAutomatic(err, "global", "Uncaught exception");
-            process.exit(1);
+            (process.exit as (code?: number) => void)(1);
           };
           process.on("uncaughtException", nodeOnError);
           handlers.push(() => {
@@ -625,7 +618,7 @@ export class FlareLog {
 
     for (const [key, value] of Object.entries(metadata)) {
       const shouldScrub = scrubFields.some(
-        (field) => key.toLowerCase().includes(field.toLowerCase())
+        (field: string) => key.toLowerCase().includes(field.toLowerCase())
       );
 
       if (shouldScrub) {
@@ -891,10 +884,10 @@ export class FlareLogChild {
     this.parent.setTag(key, value);
   }
 
-  async capture<T>(
+async capture<T>(
     fn: () => Promise<T> | T,
     opts?: CaptureOptions
-  ): Promise<T> {
+  ): Promise<T | undefined> {
     return this.parent.capture(fn, {
       ...opts,
       source: opts?.source ?? this.defaultSource,
@@ -902,7 +895,7 @@ export class FlareLogChild {
     });
   }
 
-  captureSync<T>(fn: () => T, opts?: CaptureOptions): T {
+  captureSync<T>(fn: () => T, opts?: CaptureOptions): T | undefined {
     return this.parent.captureSync(fn, {
       ...opts,
       source: opts?.source ?? this.defaultSource,
