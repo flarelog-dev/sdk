@@ -163,27 +163,6 @@ const logger = new FlareLog({
 });
 ```
 
-## Secure Endpoints
-
-Only HTTPS endpoints are allowed by default to prevent accidental plaintext transmission of sensitive data.
-
-```typescript
-// ✅ Allowed (default HTTPS)
-const logger = new FlareLog({ apiKey: "..." });
-
-// ✅ Allowed (localhost)
-const logger = new FlareLog({ apiKey: "...", endpoint: "http://localhost:9999" });
-
-// ❌ Blocked
-const logger = new FlareLog({ apiKey: "...", endpoint: "http://internal.corp" });
-
-// ✅ Allowed (explicit opt-in)
-const logger = new FlareLog({
-  apiKey: "...",
-  endpoint: "http://internal.corp",
-  allowInsecure: true,
-});
-```
 
 ## Sample Rate
 

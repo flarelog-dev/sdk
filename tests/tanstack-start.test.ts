@@ -6,7 +6,6 @@ describe("tanstack-start middleware", () => {
   it("should attach logger and log request completion", async () => {
     const logger = new FlareLog({
       apiKey: "test-key",
-      project: "test",
       endpoint: "http://localhost:9999",
       batchSize: 1,
     });
@@ -38,7 +37,6 @@ describe("tanstack-start middleware", () => {
   it("should log errors", async () => {
     const logger = new FlareLog({
       apiKey: "test-key",
-      project: "test",
       endpoint: "http://localhost:9999",
       batchSize: 1,
     });
@@ -71,7 +69,6 @@ describe("withTanStackStart", () => {
   it("should wrap handler and log requests", async () => {
     const logger = new FlareLog({
       apiKey: "test-key",
-      project: "test",
       endpoint: "http://localhost:9999",
       batchSize: 1,
     });
