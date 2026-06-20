@@ -93,9 +93,9 @@
   ],
   "scripts": {
     "build": "tsup",
-    "check": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run build"
+    "lint": "eslint src/ tests/",
+    "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
     "react": ">=16.8.0"

@@ -1,0 +1,90 @@
+name: Bundle Size
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  size:
+    name: Check bundle size
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Report bundle sizes
+        id: size-report
+        run: |
+          echo "### Bundle Size Report" > size-report.md
+          echo "" >> size-report.md
+          echo "| File | Size (gzip) |" >> size-report.md
+          echo "|------|-------------|" >> size-report.md
+          
+          for file in dist/**/*.js; do
+            if [ -f "$file" ]; then
+              raw=$(stat -c%s "$file")
+              gzip=$(gzip -c "$file" | wc -c)
+              name=$(echo "$file" | sed 's|dist/||')
+              echo "| $name | $(numfmt --to=iec-i --suffix=B $gzip) |" >> size-report.md
+            fi
+          done
+          
+          echo "" >> size-report.md
+          echo "**Total dist size (raw):** $(du -sh dist/ | cut -f1)" >> size-report.md
+          
+          cat size-report.md
+          echo "report<<EOF" >> "$GITHUB_OUTPUT"
+          cat size-report.md >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Post size report on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const report = `${{ steps.size-report.outputs.report }}`;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Bundle Size Report')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: report,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: report,
+              });
+            }
