@@ -1,5 +1,4 @@
-import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import type { ReadableLogRecord } from "@opentelemetry/sdk-logs";
+import type { ReadableSpan, ReadableLogRecord } from "./types";
 import type { Transport } from "./transport";
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -60,8 +59,8 @@ function formatSpan(span: ReadableSpan): string {
   const path = attrs["url.path"] ?? attrs["http.target"];
   const statusCode = attrs["http.response.status_code"] ?? attrs["http.status_code"];
   const httpInfo = method || path ? ` ${color ? "\x1b[36m" : ""}${method ?? ""} ${path ?? ""}${statusCode ? ` → ${statusCode}` : ""}${color ? RESET : ""}` : "";
-  const traceId = span.spanContext().traceId;
-  const spanId = span.spanContext().spanId;
+  const traceId = span.spanContext.traceId;
+  const spanId = span.spanContext.spanId;
   const ctxStr = color ? ` \x1b[2m[trace=${traceId.slice(0, 8)} span=${spanId} ${durationMs.toFixed(1)}ms ${status}]\x1b[0m` : ` [trace=${traceId.slice(0, 8)} span=${spanId} ${durationMs.toFixed(1)}ms ${status}]`;
   return `${span.name}${httpInfo}${ctxStr}`;
 }

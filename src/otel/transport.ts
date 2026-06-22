@@ -1,5 +1,5 @@
-import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import type { ReadableLogRecord } from "@opentelemetry/sdk-logs";
+import type { ReadableSpan } from "./types";
+import type { ReadableLogRecord } from "./types";
 
 /**
  * A Transport is responsible for delivering telemetry to a backend.

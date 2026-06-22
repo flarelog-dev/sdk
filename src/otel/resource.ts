@@ -1,21 +1,17 @@
-import { defaultResource, resourceFromAttributes, type Resource } from "@opentelemetry/resources";
-import {
-  ATTR_SERVICE_NAME,
-  ATTR_SERVICE_VERSION,
-  ATTR_SERVICE_NAMESPACE,
-  ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
-  ATTR_TELEMETRY_SDK_NAME,
-  ATTR_TELEMETRY_SDK_LANGUAGE,
-  ATTR_TELEMETRY_SDK_VERSION,
-} from "@opentelemetry/semantic-conventions";
-// Experimental attrs (host.name, cloud.provider) live in the incubating entry point.
-import {
-  ATTR_HOST_NAME,
-  ATTR_CLOUD_PROVIDER,
-} from "@opentelemetry/semantic-conventions/incubating";
+import type { Resource } from "./types";
 import { detectRuntime, detectServiceName } from "./env";
 
 const SDK_VERSION = "2.0.0";
+
+const ATTR_SERVICE_NAME = "service.name";
+const ATTR_SERVICE_VERSION = "service.version";
+const ATTR_SERVICE_NAMESPACE = "service.namespace";
+const ATTR_DEPLOYMENT_ENVIRONMENT_NAME = "deployment.environment.name";
+const ATTR_TELEMETRY_SDK_NAME = "telemetry.sdk.name";
+const ATTR_TELEMETRY_SDK_LANGUAGE = "telemetry.sdk.language";
+const ATTR_TELEMETRY_SDK_VERSION = "telemetry.sdk.version";
+const ATTR_HOST_NAME = "host.name";
+const ATTR_CLOUD_PROVIDER = "cloud.provider";
 
 export interface ResourceConfig {
   serviceName?: string;
@@ -23,16 +19,19 @@ export interface ResourceConfig {
   serviceNamespace?: string;
   environment?: string;
   serverName?: string;
-  /** Extra resource attributes (e.g. from OTEL_RESOURCE_ATTRIBUTES) */
   attributes?: Record<string, string>;
 }
 
-/**
- * Build the OTel Resource for this process.
- *
- * A Resource describes the entity producing telemetry (service name, version,
- * cloud provider, etc.). It's attached to every log record and span.
- */
+function createResource(attributes: Record<string, unknown>): Resource {
+  return {
+    attributes,
+    merge(other: Resource | null): Resource {
+      if (!other) return this;
+      return createResource({ ...this.attributes, ...other.attributes });
+    },
+  };
+}
+
 export function buildResource(config: ResourceConfig = {}): Resource {
   const runtime = detectRuntime();
   const attrs: Record<string, string> = {
@@ -41,40 +40,33 @@ export function buildResource(config: ResourceConfig = {}): Resource {
     [ATTR_TELEMETRY_SDK_VERSION]: SDK_VERSION,
   };
 
-  // service.name
   attrs[ATTR_SERVICE_NAME] = config.serviceName ?? detectServiceName();
 
-  // service.version
   if (config.serviceVersion) {
     attrs[ATTR_SERVICE_VERSION] = config.serviceVersion;
   }
 
-  // service.namespace
   if (config.serviceNamespace) {
     attrs[ATTR_SERVICE_NAMESPACE] = config.serviceNamespace;
   }
 
-  // deployment.environment.name
   if (config.environment) {
     attrs[ATTR_DEPLOYMENT_ENVIRONMENT_NAME] = config.environment;
   }
 
-  // host.name
   if (config.serverName) {
     attrs[ATTR_HOST_NAME] = config.serverName;
   }
 
-  // Cloud provider detection
   if (runtime === "cloudflare-workers") {
     attrs[ATTR_CLOUD_PROVIDER] = "cloudflare";
   }
 
-  // Merge extra attributes from OTEL_RESOURCE_ATTRIBUTES
   if (config.attributes) {
     for (const [k, v] of Object.entries(config.attributes)) {
       attrs[k] = v;
     }
   }
 
-  return defaultResource().merge(resourceFromAttributes(attrs));
+  return createResource(attrs);
 }

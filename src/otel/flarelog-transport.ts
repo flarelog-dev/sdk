@@ -1,6 +1,5 @@
-import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import type { ReadableLogRecord } from "@opentelemetry/sdk-logs";
-import { JsonLogsSerializer, JsonTraceSerializer } from "@opentelemetry/otlp-transformer";
+import type { ReadableSpan, ReadableLogRecord } from "./types";
+import { createExportLogsServiceRequest, createExportTraceServiceRequest } from "./otlp-serializer";
 import type { Transport } from "./transport";
 
 export interface FlarelogTransportConfig {
@@ -58,13 +57,13 @@ export class FlarelogTransport implements Transport {
 
   async exportLogs(logs: ReadableLogRecord[]): Promise<void> {
     if (logs.length === 0) return;
-    const body = JSON.parse(new TextDecoder().decode(JsonLogsSerializer.serializeRequest(logs)));
+    const body = createExportLogsServiceRequest(logs);
     await this.send(this.logsUrl, body);
   }
 
   async exportSpans(spans: ReadableSpan[]): Promise<void> {
     if (!this.enableTraces || spans.length === 0) return;
-    const body = JSON.parse(new TextDecoder().decode(JsonTraceSerializer.serializeRequest(spans)));
+    const body = createExportTraceServiceRequest(spans);
     await this.send(this.tracesUrl, body);
   }
 

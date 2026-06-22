@@ -1,143 +1,218 @@
-import { diag, DiagConsoleLogger, DiagLogLevel, context, propagation } from "@opentelemetry/api";
-import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
-import { W3CTraceContextPropagator, CompositePropagator, W3CBaggagePropagator } from "@opentelemetry/core";
-import { BasicTracerProvider, BatchSpanProcessor, SimpleSpanProcessor, ConsoleSpanExporter, type SpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { LoggerProvider, BatchLogRecordProcessor, SimpleLogRecordProcessor, ConsoleLogRecordExporter, type LogRecordProcessor } from "@opentelemetry/sdk-logs";
-import type { Resource } from "@opentelemetry/resources";
+import type { Resource, ReadableSpan, ReadableLogRecord, TracerProvider, LoggerProvider, Logger, SpanExporter, LogRecordExporter, InstrumentationScope } from "./types";
+import { ensureContextManager, getSpanContext } from "./context";
+import { activeContext } from "./context";
+import { SimpleTracerProvider } from "./span";
 import type { Transport } from "./transport";
-
-let contextManagerInstalled = false;
-
-/**
- * Install the global context manager and propagator (once per process).
- *
- * This is required for log-to-trace correlation: when a log is emitted inside
- * a span's `context.with()` callback, the LogRecord picks up the active span's
- * traceId + spanId from the context manager.
- *
- * We use AsyncLocalStorageContextManager which works in Node.js, Bun, Deno,
- * and Cloudflare Workers (with nodejs_compat enabled). For runtimes without
- * AsyncLocalStorage, context propagation degrades gracefully (logs still work,
- * they just don't carry traceId/spanId unless explicitly set).
- */
-function ensureContextManagerInstalled(): void {
-  if (contextManagerInstalled) return;
-  try {
-    context.setGlobalContextManager(new AsyncLocalStorageContextManager());
-    propagation.setGlobalPropagator(
-      new CompositePropagator({
-        propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
-      })
-    );
-    contextManagerInstalled = true;
-  } catch (err) {
-    diag.warn("Failed to install context manager — log-to-trace correlation may not work", err);
-  }
-}
 
 export interface ProviderOptions {
   resource: Resource;
   transports: Transport[];
-  /** Enable OTel SDK diagnostic logging. Default false. */
   debug?: boolean;
-  /**
-   * Worker mode: use SimpleSpanProcessor / SimpleLogRecordProcessor (no batching,
-   * flush on every span end). Required for Cloudflare Workers, where the runtime
-   * may not live long enough for batch processors to flush.
-   * Default: auto-detect.
-   */
   workerMode?: boolean;
-  /** Max batch size before flushing. Default 100. */
   maxQueueSize?: number;
-  /** Max interval between flushes (ms). Default 5000 (Node), 0 (Worker). */
   scheduledDelayMillis?: number;
 }
 
-/**
- * Set up a TracerProvider and LoggerProvider for this FlareLog instance.
- *
- * Each FlareLog owns its own providers (not the OTel globals). This lets
- * multiple FlareLog instances coexist in the same process — important for
- * tests and for apps that want isolated telemetry configs.
- *
- * To integrate with other OTel libraries that use the global API, call
- * `tracerProvider.register()` yourself after construction. By default we
- * don't touch the globals.
- */
+class TransportSpanExporter implements SpanExporter {
+  constructor(private transport: Transport) {}
+  async export(spans: ReadableSpan[]): Promise<void> { await this.transport.exportSpans(spans); }
+  async forceFlush(): Promise<void> { await this.transport.flush(); }
+  async shutdown(): Promise<void> { await this.transport.shutdown(); }
+}
+
+class TransportLogExporter implements LogRecordExporter {
+  constructor(private transport: Transport) {}
+  async export(logs: ReadableLogRecord[]): Promise<void> { await this.transport.exportLogs(logs); }
+  async forceFlush(): Promise<void> { await this.transport.flush(); }
+  async shutdown(): Promise<void> { await this.transport.shutdown(); }
+}
+
+class SimpleSpanProcessor {
+  private exporter: TransportSpanExporter;
+  constructor(transport: Transport) {
+    this.exporter = new TransportSpanExporter(transport);
+  }
+  async onEnd(span: ReadableSpan): Promise<void> {
+    await this.exporter.export([span]);
+  }
+  async forceFlush(): Promise<void> { await this.exporter.forceFlush(); }
+  async shutdown(): Promise<void> { await this.exporter.shutdown(); }
+}
+
+class BatchSpanProcessor {
+  private queue: ReadableSpan[] = [];
+  private timer?: ReturnType<typeof setTimeout>;
+  private readonly maxQueueSize: number;
+  private readonly scheduledDelayMillis: number;
+  private exporter: TransportSpanExporter;
+
+  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number }) {
+    this.maxQueueSize = opts.maxQueueSize;
+    this.scheduledDelayMillis = opts.scheduledDelayMillis;
+    this.exporter = new TransportSpanExporter(transport);
+    if (this.scheduledDelayMillis > 0) {
+      this.timer = setInterval(() => { this.flush().catch(() => {}); }, this.scheduledDelayMillis);
+    }
+  }
+
+  async onEnd(span: ReadableSpan): Promise<void> {
+    this.queue.push(span);
+    if (this.queue.length >= this.maxQueueSize) {
+      await this.flush();
+    }
+  }
+
+  async flush(): Promise<void> {
+    if (this.queue.length === 0) return;
+    const batch = this.queue.splice(0, this.queue.length);
+    await this.exporter.export(batch);
+  }
+
+  async forceFlush(): Promise<void> { await this.flush(); await this.exporter.forceFlush(); }
+  async shutdown(): Promise<void> {
+    if (this.timer) clearInterval(this.timer);
+    await this.flush();
+    await this.exporter.shutdown();
+  }
+}
+
+class SimpleLogProcessor {
+  private exporter: TransportLogExporter;
+  constructor(transport: Transport) {
+    this.exporter = new TransportLogExporter(transport);
+  }
+  async onEmit(log: ReadableLogRecord): Promise<void> {
+    await this.exporter.export([log]);
+  }
+  async forceFlush(): Promise<void> { await this.exporter.forceFlush(); }
+  async shutdown(): Promise<void> { await this.exporter.shutdown(); }
+}
+
+class BatchLogProcessor {
+  private queue: ReadableLogRecord[] = [];
+  private timer?: ReturnType<typeof setTimeout>;
+  private readonly maxQueueSize: number;
+  private readonly scheduledDelayMillis: number;
+  private exporter: TransportLogExporter;
+
+  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number }) {
+    this.maxQueueSize = opts.maxQueueSize;
+    this.scheduledDelayMillis = opts.scheduledDelayMillis;
+    this.exporter = new TransportLogExporter(transport);
+    if (this.scheduledDelayMillis > 0) {
+      this.timer = setInterval(() => { this.flush().catch(() => {}); }, this.scheduledDelayMillis);
+    }
+  }
+
+  async onEmit(log: ReadableLogRecord): Promise<void> {
+    this.queue.push(log);
+    if (this.queue.length >= this.maxQueueSize) {
+      await this.flush();
+    }
+  }
+
+  async flush(): Promise<void> {
+    if (this.queue.length === 0) return;
+    const batch = this.queue.splice(0, this.queue.length);
+    await this.exporter.export(batch);
+  }
+
+  async forceFlush(): Promise<void> { await this.flush(); await this.exporter.forceFlush(); }
+  async shutdown(): Promise<void> {
+    if (this.timer) clearInterval(this.timer);
+    await this.flush();
+    await this.exporter.shutdown();
+  }
+}
+
+class FlareLogLoggerProvider implements LoggerProvider {
+  private resource: Resource;
+  private scope: InstrumentationScope;
+  private processors: Array<SimpleLogProcessor | BatchLogProcessor>;
+
+  constructor(resource: Resource, scope: InstrumentationScope, processors: Array<SimpleLogProcessor | BatchLogProcessor>) {
+    this.resource = resource;
+    this.scope = scope;
+    this.processors = processors;
+  }
+
+  getLogger(name: string, version?: string): Logger {
+    const scope = { name, version: version ?? this.scope.version };
+    return {
+      emit: (record) => {
+        const now = Date.now();
+        const hrTime: [number, number] = [Math.floor(now / 1000), (now % 1000) * 1_000_000];
+        const spanCtx = record.context ? getSpanContext(record.context) : getSpanContext(activeContext());
+        const logRecord: ReadableLogRecord = {
+          hrTime,
+          hrTimeObserved: hrTime,
+          severityNumber: record.severityNumber,
+          severityText: record.severityText,
+          body: record.body,
+          attributes: (record.attributes as Record<string, unknown>) ?? {},
+          instrumentationScope: scope,
+          resource: this.resource,
+          spanContext: spanCtx,
+        };
+        for (const p of this.processors) {
+          p.onEmit(logRecord).catch(() => {});
+        }
+      },
+    };
+  }
+
+  async forceFlush(): Promise<void> {
+    await Promise.all(this.processors.map((p) => p.forceFlush()));
+  }
+
+  async shutdown(): Promise<void> {
+    await Promise.all(this.processors.map((p) => p.shutdown()));
+  }
+}
+
 export function initProviders(opts: ProviderOptions): {
-  tracerProvider: BasicTracerProvider;
+  tracerProvider: TracerProvider;
   loggerProvider: LoggerProvider;
   flush: () => Promise<void>;
   shutdown: () => Promise<void>;
 } {
-  ensureContextManagerInstalled();
-
-  if (opts.debug) {
-    diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
-  }
+  ensureContextManager();
 
   const isWorker = opts.workerMode ?? false;
+  const scope: InstrumentationScope = { name: "flarelog", version: "2.0.0" };
 
-  // --- TracerProvider ---
-  const spanProcessors: SpanProcessor[] = [];
-
-  for (const transport of opts.transports) {
-    if (isWorker) {
-      spanProcessors.push(
-        new SimpleSpanProcessor(new TransportSpanExporter(transport))
-      );
-    } else {
-      spanProcessors.push(
-        new BatchSpanProcessor(new TransportSpanExporter(transport), {
-          maxQueueSize: opts.maxQueueSize ?? 100,
-          scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
-          maxExportBatchSize: 50,
-        })
-      );
-    }
-  }
-
-  if (opts.debug) {
-    spanProcessors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()));
-  }
-
-  const tracerProvider = new BasicTracerProvider({
-    resource: opts.resource,
-    spanProcessors,
-  });
-
-  // --- LoggerProvider ---
-  const logProcessors: LogRecordProcessor[] = [];
+  const spanProcessors: Array<SimpleSpanProcessor | BatchSpanProcessor> = [];
+  const logProcessors: Array<SimpleLogProcessor | BatchLogProcessor> = [];
 
   for (const transport of opts.transports) {
     if (isWorker) {
-      logProcessors.push(
-        new SimpleLogRecordProcessor(new TransportLogExporter(transport))
-      );
+      spanProcessors.push(new SimpleSpanProcessor(transport));
+      logProcessors.push(new SimpleLogProcessor(transport));
     } else {
-      logProcessors.push(
-        new BatchLogRecordProcessor(new TransportLogExporter(transport), {
-          maxQueueSize: opts.maxQueueSize ?? 100,
-          scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
-          maxExportBatchSize: 50,
-        })
-      );
+      spanProcessors.push(new BatchSpanProcessor(transport, {
+        maxQueueSize: opts.maxQueueSize ?? 100,
+        scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
+      }));
+      logProcessors.push(new BatchLogProcessor(transport, {
+        maxQueueSize: opts.maxQueueSize ?? 100,
+        scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
+      }));
     }
   }
 
-  if (opts.debug) {
-    logProcessors.push(new SimpleLogRecordProcessor(new ConsoleLogRecordExporter()));
-  }
+  const onSpanEnd = (span: ReadableSpan) => {
+    for (const p of spanProcessors) {
+      p.onEnd(span).catch(() => {});
+    }
+  };
 
-  const loggerProvider = new LoggerProvider({
-    resource: opts.resource,
-    processors: logProcessors,
-  });
+  const tracerProvider = new SimpleTracerProvider(opts.resource, onSpanEnd);
+  const loggerProvider = new FlareLogLoggerProvider(opts.resource, scope, logProcessors);
 
   const flush = async () => {
     await Promise.all([
-      tracerProvider.forceFlush(),
-      loggerProvider.forceFlush(),
+      ...spanProcessors.map((p) => p.forceFlush()),
+      ...logProcessors.map((p) => p.forceFlush()),
     ]);
     for (const transport of opts.transports) {
       await transport.flush();
@@ -147,8 +222,8 @@ export function initProviders(opts: ProviderOptions): {
   const shutdown = async () => {
     await flush();
     await Promise.all([
-      tracerProvider.shutdown(),
-      loggerProvider.shutdown(),
+      ...spanProcessors.map((p) => p.shutdown()),
+      ...logProcessors.map((p) => p.shutdown()),
     ]);
     for (const transport of opts.transports) {
       await transport.shutdown();
@@ -156,50 +231,4 @@ export function initProviders(opts: ProviderOptions): {
   };
 
   return { tracerProvider, loggerProvider, flush, shutdown };
-}
-
-// ---------------------------------------------------------------------------
-// Adapters: wrap a Transport as an OTel SpanExporter / LogRecordExporter.
-// ---------------------------------------------------------------------------
-
-import type { SpanExporter, ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import type { ExportResult } from "@opentelemetry/core";
-import type { LogRecordExporter, ReadableLogRecord } from "@opentelemetry/sdk-logs";
-
-class TransportSpanExporter implements SpanExporter {
-  constructor(private transport: Transport) {}
-
-  export(spans: ReadableSpan[], result: (r: ExportResult) => void): void {
-    this.transport.exportSpans(spans).then(
-      () => result({ code: 0 }), // ExportResultCode.SUCCESS
-      (err) => result({ code: 1, error: err }) // ExportResultCode.FAILED
-    );
-  }
-
-  async shutdown(): Promise<void> {
-    await this.transport.shutdown();
-  }
-
-  async forceFlush(): Promise<void> {
-    await this.transport.flush();
-  }
-}
-
-class TransportLogExporter implements LogRecordExporter {
-  constructor(private transport: Transport) {}
-
-  export(logs: ReadableLogRecord[], result: (r: ExportResult) => void): void {
-    this.transport.exportLogs(logs).then(
-      () => result({ code: 0 }),
-      (err) => result({ code: 1, error: err })
-    );
-  }
-
-  async shutdown(): Promise<void> {
-    await this.transport.shutdown();
-  }
-
-  async forceFlush(): Promise<void> {
-    await this.transport.flush();
-  }
 }

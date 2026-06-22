@@ -1,5 +1,5 @@
-import { trace, context, type Span, type Attributes, type SpanOptions, type Tracer, SpanKind, SpanStatusCode } from "@opentelemetry/api";
-import { type Logger } from "@opentelemetry/api-logs";
+import { type Span, type Attributes, type SpanOptions, type Tracer, type Logger, type LoggerProvider, SpanKind, SpanStatusCode } from "./otel/types";
+import { activeContext, withContext, setSpan } from "./otel/context";
 import type {
   FlareLogConfig,
   LogEntry,
@@ -24,8 +24,6 @@ import { ConsoleTransport } from "./otel/console-transport";
 import { OTLPTransport } from "./otel/otlp-transport";
 import { FlarelogTransport } from "./otel/flarelog-transport";
 import type { Transport } from "./otel/transport";
-import type { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
-import type { LoggerProvider } from "@opentelemetry/sdk-logs";
 import { createWorkerFetchHandler, wrapWorker } from "./workers";
 import { extractContext, injectContext, getActiveSpanContext, ensurePropagatorInstalled } from "./otel/propagation";
 
@@ -128,7 +126,7 @@ export class FlareLog {
   private transports: Transport[];
 
   /** @internal Exposed for advanced users who want to integrate with other OTel libraries */
-  readonly tracerProvider: BasicTracerProvider;
+  readonly tracerProvider: { getTracer(name: string, version?: string): Tracer };
   /** @internal Exposed for advanced users who want to integrate with other OTel libraries */
   readonly loggerProvider: LoggerProvider;
 
@@ -378,7 +376,7 @@ export class FlareLog {
       attributes: this.scrubAttributes(attributes) as never,
       // Pass the active Context so the LogRecord picks up the active span's
       // traceId + spanId (log-to-trace correlation).
-      context: context.active(),
+      context: activeContext(),
     });
   }
 
@@ -498,9 +496,9 @@ export class FlareLog {
       span.setAttribute("flarelog.trace_id_hint", ctx.traceId);
     }
 
-    const activeCtx = trace.setSpan(parentContext, span);
+    const activeCtx = setSpan(parentContext, span);
 
-    return context.with(activeCtx, async () => {
+    return withContext(activeCtx, async () => {
       const startTime = Date.now();
       try {
         const result = await handler();
@@ -549,8 +547,8 @@ export class FlareLog {
       kind: opts?.kind,
       attributes: opts?.attributes,
     });
-    const ctx = trace.setSpan(context.active(), span);
-    return context.with(ctx, async () => {
+    const ctx = setSpan(activeContext(), span);
+    return withContext(ctx, async () => {
       try {
         return await fn(span);
       } catch (err) {
