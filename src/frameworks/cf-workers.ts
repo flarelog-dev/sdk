@@ -2,24 +2,38 @@ import type { FlareLog } from "../client";
 import type { WorkerFetchHandler } from "../types";
 
 /**
- * Wrap a Cloudflare Worker fetch handler with automatic logging.
- * 
- * - Auto-creates request context with traceId
- * - Logs request start/completion with duration
- * - Captures errors automatically
- * - Flushes logs via ctx.waitUntil()
- * 
+ * Wrap a Cloudflare Worker fetch handler with automatic OTel instrumentation.
+ *
+ * v2 — emits an OTel SERVER span for every request:
+ * - Extracts W3C `traceparent` from incoming headers (or starts a new trace)
+ * - Creates a SPAN_KIND_SERVER span: `GET /api/users`
+ * - Sets http.request.method, url.path, url.full, http.response.status_code, etc.
+ * - All logs emitted inside the handler carry the span's traceId + spanId
+ * - Records exceptions on the span and sets span status
+ * - Flushes telemetry via ctx.waitUntil() (with blocking fallback for tests)
+ *
  * @example
  * ```typescript
  * import { flarelog, workerFetch } from "@flarelog/sdk";
- * 
- * const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
- * 
+ *
+ * // No API key needed — defaults to console output
+ * const logger = flarelog({});
+ *
  * export default {
  *   fetch: workerFetch(logger, async (request, env, ctx) => {
  *     return new Response("Hello");
  *   }),
  * };
+ * ```
+ *
+ * @example Fan-out to Flarelog + Grafana
+ * ```typescript
+ * // wrangler.toml:
+ * //   FLARELOG_API_KEY = "fl_your_key"
+ * //   OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp-gateway-prod-eu-west-0.grafana.net"
+ * //   OTEL_EXPORTER_OTLP_HEADERS = "Authorization=Basic <base64>"
+ * const logger = flarelog({});
+ * // → ships to both Flarelog dashboard and Grafana Cloud, plus console
  * ```
  */
 export function workerFetch<T = Response>(
@@ -27,52 +41,10 @@ export function workerFetch<T = Response>(
   handler: WorkerFetchHandler<T>
 ): WorkerFetchHandler<T> {
   return async (request, env, ctx) => {
-    const traceId =
-      request.headers.get("x-trace-id") ??
-      request.headers.get("x-request-id") ??
-      crypto.randomUUID();
-
-    const child = logger.child({
-      source: "worker:fetch",
-      traceId,
-      method: request.method,
-      path: new URL(request.url).pathname,
-      host: new URL(request.url).host,
-    });
-
-    child.debug("Request started", { url: request.url });
-    const start = Date.now();
-
-    try {
-      const result = await handler(request, env, ctx);
-      const duration = Date.now() - start;
-      
-      const status = result instanceof Response ? result.status : undefined;
-      
-      child.info("Request completed", {
-        durationMs: duration,
-        status,
-      });
-
-      if (typeof ctx.waitUntil === 'function') {
-        ctx.waitUntil(logger.flush());
-      } else {
-        await logger.flush();
-      }
-      return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      child.logError(err, {
-        message: "Request failed",
-        metadata: { durationMs: duration, url: request.url },
-      });
-
-      if (typeof ctx.waitUntil === 'function') {
-        ctx.waitUntil(logger.flush());
-      } else {
-        await logger.flush();
-      }
-      throw err;
-    }
+    return logger.withRequest(
+      { request },
+      ctx,
+      async () => handler(request, env, ctx)
+    );
   };
 }

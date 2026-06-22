@@ -1,34 +1,35 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FlareLog } from "../src/client";
+import {
+  extractOtlpLogs,
+  attrsToObject,
+  getLogCalls,
+  mockFetch,
+} from "./helpers";
 
 function createLogger(config: Record<string, unknown> = {}) {
   return new FlareLog({
     apiKey: "test",
-    batchSize: 100,
     flushIntervalMs: 10000,
+    workerMode: true, // use SimpleLogRecordProcessor so flush() is synchronous
     ...config,
-  });
-}
-
-function mockFetch() {
-  return vi.fn().mockResolvedValue({
-    ok: true,
-    text: async () => "",
-    json: async () => ({ result: { data: { success: true, ingested: 0 } } }),
   });
 }
 
 async function flushAndGetLogs(logger: FlareLog, fetchMock: ReturnType<typeof vi.fn>) {
   await logger.flush();
-  const calls = fetchMock.mock.calls;
-  if (calls.length === 0) return [];
-  const body = JSON.parse(calls[calls.length - 1][1].body);
-  return body.logs as Array<{
-    level: string;
-    message: string;
-    source?: string;
-    metadata?: Record<string, unknown>;
-  }>;
+  const logCalls = getLogCalls(fetchMock);
+  if (logCalls.length === 0) return [];
+  const allLogs: ReturnType<typeof extractOtlpLogs> = [];
+  for (const body of logCalls) {
+    allLogs.push(...extractOtlpLogs(body));
+  }
+  return allLogs.map((l) => ({
+    level: l.severityText ?? "INFO",
+    message: l.body?.stringValue ?? "",
+    metadata: attrsToObject(l.attributes),
+    traceId: l.traceId,
+  }));
 }
 
 describe("FlareLog core", () => {
@@ -37,7 +38,7 @@ describe("FlareLog core", () => {
 
   beforeEach(() => {
     fetchMock = mockFetch();
-    globalThis.fetch = fetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -54,6 +55,7 @@ describe("FlareLog core", () => {
     expect(logs).toHaveLength(2);
     expect(logs[0].level).toBe("INFO");
     expect(logs[1].level).toBe("ERROR");
+    expect(logs[0].metadata.foo).toBe("bar");
   });
 
   it("captures async errors and rethrows by default", async () => {
@@ -74,7 +76,7 @@ describe("FlareLog core", () => {
     child.info("child log", { extra: true });
 
     const logs = await flushAndGetLogs(logger, fetchMock);
-    expect(logs[0].source).toBe("child");
+    expect(logs[0].metadata.source).toBe("child");
     expect(logs[0].metadata).toMatchObject({
       requestId: "123",
       extra: true,
@@ -88,11 +90,13 @@ describe("FlareLog core", () => {
 
     logger.logError(err);
     const logs = await flushAndGetLogs(logger, fetchMock);
-    expect(logs[0].metadata).toMatchObject({
-      error: expect.objectContaining({
-        message: "outer",
-        cause: expect.objectContaining({ message: "root" }),
-      }),
+    // Error object is JSON-stringified because OTel attributes only accept primitives
+    const rawError = logs[0].metadata?.error as string | undefined;
+    expect(rawError).toBeDefined();
+    const errorObj = JSON.parse(rawError!) as { message: string; cause: { message: string } };
+    expect(errorObj).toMatchObject({
+      message: "outer",
+      cause: expect.objectContaining({ message: "root" }),
     });
   });
 
@@ -104,7 +108,6 @@ describe("FlareLog core", () => {
 
     console.error("auto captured");
     const logs = await flushAndGetLogs(logger, fetchMock);
-
     expect(logs.some((l) => l.message === "auto captured")).toBe(true);
   });
 
@@ -126,7 +129,7 @@ describe("FlareLog user context", () => {
 
   beforeEach(() => {
     fetchMock = mockFetch();
-    globalThis.fetch = fetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -140,9 +143,11 @@ describe("FlareLog user context", () => {
     logger.info("user action");
 
     const logs = await flushAndGetLogs(logger, fetchMock);
-    expect(logs[0].metadata).toMatchObject({
-      user: { id: "user_123", email: "test@example.com" },
-    });
+    // User object is JSON-stringified because OTel attributes only accept primitives
+    const rawUser = logs[0].metadata?.user as string | undefined;
+    expect(rawUser).toBeDefined();
+    const user = JSON.parse(rawUser!) as { id: string; email: string };
+    expect(user).toMatchObject({ id: "user_123", email: "test@example.com" });
   });
 
   it("clears user context when set to null", async () => {
@@ -162,7 +167,7 @@ describe("FlareLog breadcrumbs", () => {
 
   beforeEach(() => {
     fetchMock = mockFetch();
-    globalThis.fetch = fetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -184,8 +189,12 @@ describe("FlareLog breadcrumbs", () => {
     logger.logError(new Error("payment failed"));
 
     const logs = await flushAndGetLogs(logger, fetchMock);
-    expect(logs[0].metadata?.breadcrumbs).toHaveLength(2);
-    expect(logs[0].metadata?.breadcrumbs).toEqual(
+    // Breadcrumbs are JSON-stringified because OTel attributes only accept primitives
+    const rawBreadcrumbs = logs[0].metadata?.breadcrumbs as string | undefined;
+    expect(rawBreadcrumbs).toBeDefined();
+    const breadcrumbs = JSON.parse(rawBreadcrumbs!) as Array<{ category: string; message: string }>;
+    expect(breadcrumbs).toHaveLength(2);
+    expect(breadcrumbs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ category: "navigation", message: "User navigated to /checkout" }),
         expect.objectContaining({ category: "ui.click", message: "Click on button" }),
@@ -205,7 +214,10 @@ describe("FlareLog breadcrumbs", () => {
     logger.logError(new Error("error"));
 
     const logs = await flushAndGetLogs(logger, fetchMock);
-    expect(logs[0].metadata?.breadcrumbs).toHaveLength(50);
+    const rawBreadcrumbs = logs[0].metadata?.breadcrumbs as string | undefined;
+    expect(rawBreadcrumbs).toBeDefined();
+    const breadcrumbs = JSON.parse(rawBreadcrumbs!) as unknown[];
+    expect(breadcrumbs).toHaveLength(50);
   });
 });
 
@@ -215,7 +227,7 @@ describe("FlareLog tags", () => {
 
   beforeEach(() => {
     fetchMock = mockFetch();
-    globalThis.fetch = fetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -230,9 +242,11 @@ describe("FlareLog tags", () => {
     logger.info("tagged log");
 
     const logs = await flushAndGetLogs(logger, fetchMock);
-    expect(logs[0].metadata).toMatchObject({
-      tags: { version: "1.2.3", feature: "new-checkout" },
-    });
+    // Tags object is JSON-stringified because OTel attributes only accept primitives
+    const rawTags = logs[0].metadata?.tags as string | undefined;
+    expect(rawTags).toBeDefined();
+    const tags = JSON.parse(rawTags!) as Record<string, string>;
+    expect(tags).toMatchObject({ version: "1.2.3", feature: "new-checkout" });
   });
 });
 
@@ -242,7 +256,7 @@ describe("FlareLog environment config", () => {
 
   beforeEach(() => {
     fetchMock = mockFetch();
-    globalThis.fetch = fetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -273,7 +287,7 @@ describe("FlareLog beforeSend hook", () => {
 
   beforeEach(() => {
     fetchMock = mockFetch();
-    globalThis.fetch = fetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -311,7 +325,7 @@ describe("FlareLog sample rate", () => {
 
   beforeEach(() => {
     fetchMock = mockFetch();
-    globalThis.fetch = fetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {

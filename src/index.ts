@@ -7,6 +7,27 @@ export { flarelog } from "./factory";
 // Framework helpers
 export { workerFetch } from "./frameworks/cf-workers";
 
+// OTel-native exports
+export { ConsoleTransport } from "./otel/console-transport";
+export { OTLPTransport } from "./otel/otlp-transport";
+export { FlarelogTransport } from "./otel/flarelog-transport";
+export type { Transport, TransportCapabilities } from "./otel/transport";
+export { buildResource } from "./otel/resource";
+export { initProviders } from "./otel/providers";
+export {
+  extractContext,
+  injectContext,
+  getActiveSpanContext,
+  withActiveSpan,
+  ensurePropagatorInstalled,
+} from "./otel/propagation";
+export {
+  detectOtelEnv,
+  detectFlarelogEnv,
+  detectRuntime,
+  detectServiceName,
+} from "./otel/env";
+
 // Types
 export type {
   FlareLogConfig,
@@ -22,11 +43,13 @@ export type {
   ExecutionContextLike,
   FlareLogLike,
   RequestContext,
+  TransportConfig,
+  UserContext,
+  Breadcrumb,
 } from "./types";
 
 // Utilities
 export { shouldLog, getLevelValue } from "./levels";
-export { LogBatch } from "./batch";
 export {
   serializeError,
   getRootCause,

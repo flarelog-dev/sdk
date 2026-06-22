@@ -1,34 +1,21 @@
 # @flarelog/sdk
 
-Zero-config logging SDK for Cloudflare Workers, Node.js, and any JavaScript runtime with `fetch` support. Send structured logs to FlareLog with minimal setup and excellent developer experience.
+**OpenTelemetry-native observability for Cloudflare Workers, Node.js, and browsers.**
 
-## Features
+Ship logs and traces to any OTel backend — Grafana Cloud, Honeycomb, Tempo, Jaeger, Datadog — or use the Flarelog hosted dashboard. No API key required to get started.
 
-- **Cloudflare Workers first** — Works seamlessly in edge environments
-- **Zero config** — Just an API key
-- **Auto-detection** — Environment, release, and server name detected automatically
-- **Framework integrations** — Express, Hono, Next.js, React, TanStack Start, and more
-- **Structured logging** — Attach metadata to every log entry
-- **Automatic batching** — Efficient log transmission with configurable batch size
-- **Log levels** — TRACE, DEBUG, INFO, WARN, ERROR, FATAL with level filtering
-- **Child loggers** — Create contextual loggers with default metadata
-- **TypeScript** — Full type safety out of the box
-- **Tiny bundle** — Minimal footprint for edge environments
+---
 
-## Installation
+## TL;DR
 
 ```bash
 npm install @flarelog/sdk
 ```
 
-## Quick Start (3 lines)
-
-### Cloudflare Workers
-
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
+const logger = flarelog({}); // no config → pretty-prints to console
 
 export default {
   fetch: workerFetch(logger, async (request, env, ctx) => {
@@ -38,116 +25,146 @@ export default {
 };
 ```
 
-### Express.js
+- **Zero config** → logs to console, works immediately
+- **One env var** (`OTEL_EXPORTER_OTLP_ENDPOINT`) → ships to Grafana Cloud, Honeycomb, or any OTel backend
+- **One secret** (`FLARELOG_API_KEY`) → ships to the Flarelog hosted dashboard
+- **Fan-out** → console + OTLP + Flarelog simultaneously
 
-```typescript
-import { flarelog } from "@flarelog/sdk";
-import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
+---
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, });
+## Do I need the full Flarelog platform?
 
-app.use(expressMiddleware(logger));
-app.use(expressErrorHandler(logger));
+| I want to… | What to do |
+|---|---|
+| Try it locally with zero setup | `flarelog({})` — console output, no config needed |
+| Ship to Grafana Cloud / Honeycomb / self-hosted OTel | Set `OTEL_EXPORTER_OTLP_ENDPOINT` — no API key required |
+| Get a hosted dashboard with AI analysis and long-term storage | Sign up at [flarelog.dev](https://flarelog.dev) and set `FLARELOG_API_KEY` |
+| Do all three at once | [Fan-out transport config](#fan-out) |
+
+---
+
+## Installation
+
+```bash
+npm install @flarelog/sdk
 ```
 
-### Hono
+---
+
+## Quick start
+
+### Console output (dev, zero config)
 
 ```typescript
-import { flarelog } from "@flarelog/sdk";
-import { honoMiddleware } from "@flarelog/sdk/hono";
+import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
+const logger = flarelog({});
 
-app.use("*", honoMiddleware(logger));
+export default {
+  fetch: workerFetch(logger, async (request, env, ctx) => {
+    logger.info("Hello from worker!");
+    return new Response("Hello");
+  }),
+};
 ```
 
-### Next.js
+### Grafana Cloud free tier — no Flarelog account needed
+
+```toml
+# wrangler.toml
+[vars]
+OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp-gateway-prod-eu-west-0.grafana.net"
+OTEL_EXPORTER_OTLP_HEADERS  = "Authorization=Basic <base64(instance_id:api_key)>"
+OTEL_SERVICE_NAME            = "my-worker"
+```
 
 ```typescript
-import { flarelog } from "@flarelog/sdk";
-import { withFlareLog } from "@flarelog/sdk/next";
-
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, });
-
-export default withFlareLog(logger, async (req, res) => {
-  req.logger.info("Processing request");
-  res.json({ data: "Hello" });
-});
+const logger = flarelog({}); // auto-detects OTEL_EXPORTER_OTLP_ENDPOINT
 ```
 
-### React
+### Flarelog hosted dashboard
 
-```tsx
-import { flarelog } from "@flarelog/sdk";
-import { FlareLogErrorBoundary, useFlareLog } from "@flarelog/sdk/react";
-
-const logger = flarelog({ apiKey: process.env.REACT_APP_FLARELOG_API_KEY, });
-
-// Error Boundary
-<FlareLogErrorBoundary logger={logger}>
-  <App />
-</FlareLogErrorBoundary>
-
-// Hook
-const { trackEvent } = useFlareLog(logger);
-trackEvent("button_clicked", { button: "checkout" });
+```bash
+wrangler secret put FLARELOG_API_KEY
 ```
-
-## The `flarelog()` Factory
-
-The `flarelog()` function is a branded factory that creates a `FlareLog` instance with sensible defaults:
-
-- **Auto-detects environment**: `development`, `production`, etc.
-- **Auto-detects release**: from `npm_package_version`, `VERCEL_GIT_COMMIT_SHA`, etc.
-- **Auto-detects server name**: hostname
-- **Auto-enables capture**: console, globalErrors, rejections
 
 ```typescript
-import { flarelog } from "@flarelog/sdk";
+const logger = flarelog({}); // auto-detects FLARELOG_API_KEY
+```
 
+### Fan-out
+
+Ship to multiple backends simultaneously:
+
+```typescript
 const logger = flarelog({
-  apiKey: "fl_your_api_key",
-  // Everything else is auto-detected!
+  transports: [
+    { type: "console" },
+    { type: "otlp", endpoint: "https://otlp.example.com" },
+    { type: "flarelog", apiKey: "fl_your_key" },
+  ],
 });
 ```
+
+---
+
+## What's in v2
+
+| Feature | Detail |
+|---|---|
+| OTel logs + traces | Standard `@opentelemetry/api` — works with any OTel-compatible backend |
+| OTLP/HTTP JSON wire format | `/v1/logs`, `/v1/traces` — no proprietary endpoints |
+| W3C trace context | `traceparent` propagation across service bindings |
+| Log-to-trace correlation | Logs inside a span automatically carry `traceId` + `spanId` |
+| Resource attributes | `service.name`, `cloud.provider=cloudflare`, semantic HTTP conventions |
+| Optional API key | Defaults to console with zero config |
+| Multi-transport fan-out | Console + OTLP + Flarelog simultaneously |
+| Auto-instrumented spans | `workerFetch()` creates a SERVER span per request with method, path, status code, duration |
+
+---
 
 ## Configuration
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `apiKey` | `string` | **required** | Your FlareLog API key |
-| `endpoint` | `string` | `https://flarelog.dev/api` | FlareLog API endpoint |
-| `allowInsecure` | `boolean` | `false` | Allow HTTP endpoints (not recommended) |
-| `level` | `LogLevel` | `"DEBUG"` | Minimum log level to send |
-| `environment` | `string` | auto-detected | Environment name |
-| `release` | `string` | auto-detected | Release version |
-| `serverName` | `string` | auto-detected | Server identifier |
-| `batchSize` | `number` | `10` (Node), `1` (Worker) | Logs to batch before sending |
-| `flushIntervalMs` | `number` | `5000` (Node), `0` (Worker) | Max time before flushing |
-| `maxBatchSize` | `number` | `100` | Max in-flight buffer size |
-| `workerMode` | `boolean` | `false` | Enable worker-optimized batching |
-| `debug` | `boolean` | `false` | Enable SDK debug logging |
-| `defaultSource` | `string` | `""` | Default source tag for logs |
-| `sampleRate` | `number` | `1.0` | Log sampling rate (0-1) |
-| `beforeSend` | `function` | - | Modify/drop logs before sending |
-| `scrubFields` | `string[]` | common PII fields | Fields to redact from metadata |
-| `onDrop` | `function` | - | Callback when logs are dropped |
-| `autoCapture` | `object` | `{console, globalErrors, rejections}` | Auto-capture config |
+### Environment variables
 
-## Log Levels
+All standard OTel env vars are supported:
 
-Levels in order of severity (least to most):
+| Variable | Purpose |
+|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Headers, e.g. `Authorization=Basic xxx` |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | Override endpoint for logs only |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Override endpoint for traces only |
+| `OTEL_SERVICE_NAME` | `service.name` resource attribute |
+| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes (`key=value,key=value`) |
 
-```
-TRACE < DEBUG < INFO < WARN < ERROR < FATAL
-```
+Flarelog-specific:
 
-Set `level` in config to filter which logs are sent. For example, `level: "WARN"` will only send WARN, ERROR, and FATAL logs.
+| Variable | Purpose |
+|---|---|
+| `FLARELOG_API_KEY` | Enables Flarelog hosted backend |
+| `FLARELOG_ENDPOINT` | Override Flarelog endpoint (default: `https://flarelog.dev`) |
 
-## Core Methods
+### `flarelog(config?)` factory
 
 ```typescript
-// Logging
+const logger = flarelog({
+  apiKey: "fl_your_key",      // optional
+  otlpEndpoint: "https://...", // optional
+  serviceName: "my-app",       // optional
+  environment: "production",   // optional
+});
+```
+
+All fields are optional. Auto-detection reads env vars first.
+
+---
+
+## API reference
+
+### Logging
+
+```typescript
 logger.trace(message, metadata?)
 logger.debug(message, metadata?)
 logger.info(message, metadata?)
@@ -155,72 +172,109 @@ logger.warn(message, metadata?)
 logger.error(message, metadata?)
 logger.fatal(message, metadata?)
 
-// Error handling
-logger.logError(error, { message, metadata, source })
-await logger.capture(() => riskyOperation(), { label: "Operation" })
-
-// Context
-logger.setUser({ id, email, name })
-logger.setTag(key, value)
-logger.addBreadcrumb({ category, message, data })
-
-// Control
-await logger.flush()
-logger.destroy()
+logger.log(level, message, metadata?, opts?)
+logger.logError(err, opts?)
+await logger.capture(async () => riskyOp(), { label: "Op" })
 ```
 
-## Child Loggers
-
-Create contextual loggers that carry default metadata:
+### Spans
 
 ```typescript
-const requestLogger = logger.child({
-  source: "request-handler",
-  requestId: crypto.randomUUID(),
+// Manual span
+await logger.startSpan("db-query", async (span) => {
+  span.setAttribute("db.system", "postgresql");
+  const result = await db.query(...);
+  return result;
 });
 
-requestLogger.info("Processing payment"); // Includes requestId automatically
-requestLogger.error("Payment failed", { reason: "insufficient_funds" });
+// Propagate trace context into outgoing fetch calls
+const headers = new Headers();
+logger.injectTraceContext(headers);
+await fetch("https://api.example.com/data", { headers });
 ```
 
-## Manual Flush
-
-Logs are batched automatically, but you can force a flush:
+### Advanced: OTel provider access
 
 ```typescript
-// Flush before worker exits (automatic in workerFetch, but available for manual use)
-ctx.waitUntil(logger.flush());
+// Register with the global OTel API (so other OTel libs use this provider)
+logger.tracerProvider.register();
 
-// Or in Node.js before shutdown
-process.on("beforeExit", async () => {
-  await logger.flush();
-});
+// Add custom span processors
+logger.tracerProvider.addSpanProcessor(myCustomProcessor);
 ```
 
-**Note for Workers**: When using `workerFetch()` or `withRequest()`, flushing is handled automatically. The SDK flushes logs at each await boundary and guarantees delivery via `ctx.waitUntil()` on completion. If `ctx.waitUntil` is not available (e.g., in tests), the SDK falls back to a blocking flush.
+---
 
-## Advanced: Raw Log Entries
+## Framework integrations
 
-For full control over the log entry:
+### Cloudflare Workers
 
 ```typescript
-logger.logRaw({
-  level: "ERROR",
-  message: "Something went wrong",
-  source: "payment-service",
-  metadata: { orderId: "12345" },
-  traceId: "abc123",
-  spanId: "def456",
-});
+import { flarelog, workerFetch } from "@flarelog/sdk";
+
+const logger = flarelog({});
+
+export default {
+  fetch: workerFetch(logger, async (request, env, ctx) => {
+    logger.info("Request received", { url: request.url });
+    return new Response("Hello");
+  }),
+};
 ```
 
-## Documentation
+`workerFetch()` automatically creates a SERVER span per request with W3C trace context, HTTP semantic attributes, and exception recording.
 
-- [Cloudflare Workers Guide](./docs/cloudflare-workers.md) - Workers, Durable Objects, Queues, R2, KV
-- [Browser Guide](./docs/browser-guide.md) - React, Vue, Next.js, Svelte, Web Vitals
-- [Node.js Guide](./docs/nodejs-guide.md) - Express, Fastify, NestJS, Koa
-- [TanStack Start Guide](./docs/tanstack-start.md) - TanStack Start middleware and API routes
-- [Advanced Features](./docs/advanced-features.md) - Breadcrumbs, tags, beforeSend, sampleRate
+### Hono
+
+```typescript
+import { Hono } from "hono";
+import { flarelog } from "@flarelog/sdk";
+import { honoMiddleware } from "@flarelog/sdk/hono";
+
+const logger = flarelog({});
+const app = new Hono();
+app.use("*", honoMiddleware(logger));
+```
+
+### Express.js
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { expressMiddleware, expressErrorHandler } from "@flarelog/sdk/express";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+app.use(expressMiddleware(logger));
+app.use(expressErrorHandler(logger));
+```
+
+### Next.js / React / TanStack Start
+
+See the [framework guides](./docs/).
+
+---
+
+## Migrating from v1
+
+v2 is a breaking change. Key differences:
+
+| v1 | v2 |
+|---|---|
+| `apiKey` required | `apiKey` optional — defaults to console |
+| Custom HTTP format (`/api/trpc/log.ingest`) | OTLP/HTTP JSON (`/v1/logs`, `/v1/traces`) |
+| Single backend (Flarelog) | Multi-transport fan-out |
+| Custom trace ID header (`x-trace-id`) | W3C `traceparent` |
+| `workerFetch()` emits log messages | `workerFetch()` emits OTel SERVER spans |
+| No resource attributes | `service.name`, `cloud.provider`, etc. |
+
+**Steps:**
+
+1. `npm install @flarelog/sdk@^2.0.0`
+2. `flarelog()` factory and `logger.info()` etc. work the same — no changes there
+3. If you relied on "Request started/completed" log messages, switch to span-based queries
+4. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to ship to any OTel backend (optional)
+5. Your existing `FLARELOG_API_KEY` still works
+
+---
 
 ## License
 
