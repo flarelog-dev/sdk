@@ -37,7 +37,7 @@ interface NextFunction {
  * import { flarelog } from "@flarelog/sdk";
  * import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
  * 
- * const logger = flarelog({ apiKey, project: "api" });
+ * const logger = flarelog({ apiKey });
  * 
  * // In your TanStack Start app
  * app.use(tanstackStartMiddleware(logger));
@@ -91,7 +91,7 @@ export function tanstackStartMiddleware(logger: FlareLog) {
  * import { flarelog } from "@flarelog/sdk";
  * import { withTanStackStart } from "@flarelog/sdk/tanstack-start";
  * 
- * const logger = flarelog({ apiKey, project: "api" });
+ * const logger = flarelog({ apiKey });
  * 
  * export default withTanStackStart(logger, async (ctx) => {
  *   const logger = ctx.get("logger");
