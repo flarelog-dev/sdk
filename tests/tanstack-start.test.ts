@@ -1,13 +1,26 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FlareLog } from "../src/client";
 import { tanstackStartMiddleware, withTanStackStart } from "../src/frameworks/tanstack-start";
+import { mockFetch } from "./helpers";
 
 describe("tanstack-start middleware", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = mockFetch();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("should attach logger and log request completion", async () => {
     const logger = new FlareLog({
       apiKey: "test-key",
       endpoint: "http://localhost:9999",
-      batchSize: 1,
+      allowInsecure: true,
+      workerMode: true,
     });
 
     const ctx = {
@@ -38,7 +51,8 @@ describe("tanstack-start middleware", () => {
     const logger = new FlareLog({
       apiKey: "test-key",
       endpoint: "http://localhost:9999",
-      batchSize: 1,
+      allowInsecure: true,
+      workerMode: true,
     });
 
     const ctx = {
@@ -70,7 +84,8 @@ describe("withTanStackStart", () => {
     const logger = new FlareLog({
       apiKey: "test-key",
       endpoint: "http://localhost:9999",
-      batchSize: 1,
+      allowInsecure: true,
+      workerMode: true,
     });
 
     const ctx = {

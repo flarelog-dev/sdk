@@ -1,34 +1,31 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FlareLog } from "../src/client";
 import { runWithHookSkipped } from "../src/console";
+import {
+  extractOtlpLogs,
+  attrsToObject,
+  getLogCalls,
+  mockFetch,
+} from "./helpers";
 
 function createLogger() {
   return new FlareLog({
     apiKey: "test",
-    batchSize: 100,
-    flushIntervalMs: 10000,
-  });
-}
-
-function mockFetch() {
-  return vi.fn().mockResolvedValue({
-    ok: true,
-    text: async () => "",
-    json: async () => ({ result: { data: { success: true, ingested: 0 } } }),
+    workerMode: true,
   });
 }
 
 async function flushAndGetLogs(logger: FlareLog, fetchMock: ReturnType<typeof vi.fn>) {
   await logger.flush();
-  const calls = fetchMock.mock.calls;
-  if (calls.length === 0) return [];
-  const body = JSON.parse(calls[calls.length - 1][1].body);
-  return body.logs as Array<{
-    level: string;
-    message: string;
-    source?: string;
-    metadata?: Record<string, unknown>;
-  }>;
+  const logCalls = getLogCalls(fetchMock);
+  const all: ReturnType<typeof extractOtlpLogs> = [];
+  for (const body of logCalls) all.push(...extractOtlpLogs(body));
+  return all.map((l) => ({
+    level: l.severityText ?? "INFO",
+    message: l.body?.stringValue ?? "",
+    source: l.attributes ? attrsToObject(l.attributes).source as string | undefined : undefined,
+    metadata: attrsToObject(l.attributes),
+  }));
 }
 
 describe("console hooks", () => {
@@ -38,7 +35,7 @@ describe("console hooks", () => {
   beforeEach(() => {
     logger = createLogger();
     fetchMock = mockFetch();
-    globalThis.fetch = fetchMock;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -108,8 +105,10 @@ describe("console hooks", () => {
     console.error("failed", err);
 
     const logs = await flushAndGetLogs(logger, fetchMock);
-    expect(logs[0].metadata).toMatchObject({
-      error: expect.objectContaining({ message: "nested" }),
-    });
+    // Error object is JSON-stringified because OTel attributes only accept primitives
+    const rawError = logs[0].metadata?.error as string | undefined;
+    expect(rawError).toBeDefined();
+    const errorObj = JSON.parse(rawError!) as { message: string };
+    expect(errorObj).toMatchObject({ message: "nested" });
   });
 });
