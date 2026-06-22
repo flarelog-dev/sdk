@@ -301,12 +301,12 @@ v2 is a breaking change.
 
 | | Free | Pro |
 |---|---|---|
-| Requests/day | 100k | Unlimited |
-| Log retention | 1 day | 7 days |
+| Requests/mo | 100k | 2M |
+| Log retention | 7 day | 90 days |
 | Error tracking | ✅ | ✅ |
 | Cost Burn Dashboard | — | ✅ |
 | MCP server | ✅ | ✅ |
-| Alerts | Email | Email + Slack + Webhook |
+| Alerts | ✅ | ✅ |
 | Price | $0 | $19/mo |
 
 **[Start free → flarelog.dev](https://flarelog.dev)**
