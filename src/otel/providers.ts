@@ -1,8 +1,8 @@
 import { diag, DiagConsoleLogger, DiagLogLevel, context, propagation } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { W3CTraceContextPropagator, CompositePropagator, W3CBaggagePropagator } from "@opentelemetry/core";
-import { BasicTracerProvider, BatchSpanProcessor, SimpleSpanProcessor, ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
-import { LoggerProvider, BatchLogRecordProcessor, SimpleLogRecordProcessor, ConsoleLogRecordExporter } from "@opentelemetry/sdk-logs";
+import { BasicTracerProvider, BatchSpanProcessor, SimpleSpanProcessor, ConsoleSpanExporter, type SpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { LoggerProvider, BatchLogRecordProcessor, SimpleLogRecordProcessor, ConsoleLogRecordExporter, type LogRecordProcessor } from "@opentelemetry/sdk-logs";
 import type { Resource } from "@opentelemetry/resources";
 import type { Transport } from "./transport";
 
@@ -79,17 +79,15 @@ export function initProviders(opts: ProviderOptions): {
   const isWorker = opts.workerMode ?? false;
 
   // --- TracerProvider ---
-  const tracerProvider = new BasicTracerProvider({
-    resource: opts.resource,
-  });
+  const spanProcessors: SpanProcessor[] = [];
 
   for (const transport of opts.transports) {
     if (isWorker) {
-      tracerProvider.addSpanProcessor(
+      spanProcessors.push(
         new SimpleSpanProcessor(new TransportSpanExporter(transport))
       );
     } else {
-      tracerProvider.addSpanProcessor(
+      spanProcessors.push(
         new BatchSpanProcessor(new TransportSpanExporter(transport), {
           maxQueueSize: opts.maxQueueSize ?? 100,
           scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
@@ -100,19 +98,24 @@ export function initProviders(opts: ProviderOptions): {
   }
 
   if (opts.debug) {
-    tracerProvider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+    spanProcessors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()));
   }
 
+  const tracerProvider = new BasicTracerProvider({
+    resource: opts.resource,
+    spanProcessors,
+  });
+
   // --- LoggerProvider ---
-  const loggerProvider = new LoggerProvider({ resource: opts.resource });
+  const logProcessors: LogRecordProcessor[] = [];
 
   for (const transport of opts.transports) {
     if (isWorker) {
-      loggerProvider.addLogRecordProcessor(
+      logProcessors.push(
         new SimpleLogRecordProcessor(new TransportLogExporter(transport))
       );
     } else {
-      loggerProvider.addLogRecordProcessor(
+      logProcessors.push(
         new BatchLogRecordProcessor(new TransportLogExporter(transport), {
           maxQueueSize: opts.maxQueueSize ?? 100,
           scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
@@ -123,8 +126,13 @@ export function initProviders(opts: ProviderOptions): {
   }
 
   if (opts.debug) {
-    loggerProvider.addLogRecordProcessor(new SimpleLogRecordProcessor(new ConsoleLogRecordExporter()));
+    logProcessors.push(new SimpleLogRecordProcessor(new ConsoleLogRecordExporter()));
   }
+
+  const loggerProvider = new LoggerProvider({
+    resource: opts.resource,
+    processors: logProcessors,
+  });
 
   const flush = async () => {
     await Promise.all([
@@ -172,7 +180,7 @@ class TransportSpanExporter implements SpanExporter {
     await this.transport.shutdown();
   }
 
-  async forceFlush?(): Promise<void> {
+  async forceFlush(): Promise<void> {
     await this.transport.flush();
   }
 }
@@ -191,7 +199,7 @@ class TransportLogExporter implements LogRecordExporter {
     await this.transport.shutdown();
   }
 
-  async forceFlush?(): Promise<void> {
+  async forceFlush(): Promise<void> {
     await this.transport.flush();
   }
 }

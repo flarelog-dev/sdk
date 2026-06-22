@@ -1,9 +1,6 @@
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import type { ReadableLogRecord } from "@opentelemetry/sdk-logs";
-import {
-  createExportLogsServiceRequest,
-  createExportTraceServiceRequest,
-} from "@opentelemetry/otlp-transformer";
+import { JsonLogsSerializer, JsonTraceSerializer } from "@opentelemetry/otlp-transformer";
 import type { Transport } from "./transport";
 
 export interface OTLPTransportConfig {
@@ -80,13 +77,13 @@ export class OTLPTransport implements Transport {
 
   async exportLogs(logs: ReadableLogRecord[]): Promise<void> {
     if (!this.enableLogs || logs.length === 0) return;
-    const body = createExportLogsServiceRequest(logs, { useHex: true, useLongBits: false });
+    const body = JSON.parse(new TextDecoder().decode(JsonLogsSerializer.serializeRequest(logs)));
     await this.sendWithRetry(this.logsUrl, body);
   }
 
   async exportSpans(spans: ReadableSpan[]): Promise<void> {
     if (!this.enableTraces || spans.length === 0) return;
-    const body = createExportTraceServiceRequest(spans, { useHex: true, useLongBits: false });
+    const body = JSON.parse(new TextDecoder().decode(JsonTraceSerializer.serializeRequest(spans)));
     await this.sendWithRetry(this.tracesUrl, body);
   }
 

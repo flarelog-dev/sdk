@@ -1,4 +1,4 @@
-import { Resource } from "@opentelemetry/resources";
+import { defaultResource, resourceFromAttributes, type Resource } from "@opentelemetry/resources";
 import {
   ATTR_SERVICE_NAME,
   ATTR_SERVICE_VERSION,
@@ -76,5 +76,5 @@ export function buildResource(config: ResourceConfig = {}): Resource {
     }
   }
 
-  return Resource.default().merge(new Resource(attrs));
+  return defaultResource().merge(resourceFromAttributes(attrs));
 }
