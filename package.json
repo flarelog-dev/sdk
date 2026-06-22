@@ -1,6 +1,6 @@
 {
   "name": "@flarelog/sdk",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Zero-config logging SDK for Cloudflare Workers and Node.js. Send logs to FlareLog with minimal setup.",
   "keywords": [
     "logging",
