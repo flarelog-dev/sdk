@@ -64,7 +64,7 @@ FlareLog implements the parts of OTel that matter — OTLP wire format, W3C trac
 
 - **Zero runtime dependencies** — nothing to audit, nothing to conflict
 - **No `nodejs_compat` needed** — works natively on Workers
-- **Tiny bundle** — ~X KB minified (tracked per release)
+- **Tiny bundle** — ~9.5 kB gzipped (tracked per release)
 - **OTLP-compatible** — ships to Grafana Cloud, Honeycomb, Datadog, or any OTLP/HTTP backend
 
 > Note: Cloudflare's native tracing also needs no SDK and no `nodejs_compat`. Zero-dep is a wedge against other third-party OTel libraries (like `@opentelemetry/api` or `evanderkoogh/otel-cf-workers`), not against Cloudflare native.
