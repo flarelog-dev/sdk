@@ -2,93 +2,124 @@
 
 Zero-config logging for TanStack Start applications. Automatically capture request logs, errors, and performance metrics with trace IDs.
 
-## Quick Start (3 lines)
+TanStack Start does **not** expose an `app.use(...)` API. FlareLog integrates via TanStack Start's `createMiddleware()` from `@tanstack/react-start`. Register the middleware globally, per-route, or per server function.
+
+## Quick Start
 
 ```typescript
+// src/start.ts
+import { createStart } from "@tanstack/react-start";
 import { flarelog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY! });
 
-// In your TanStack Start app configuration
-app.use(tanstackStartMiddleware(logger));
+export const startInstance = createStart(() => ({
+  requestMiddleware: [tanstackStartMiddleware(logger) as never],
+}));
 ```
+
+> `tanstackStartMiddleware(logger)` returns a TanStack Start middleware built
+> with `createMiddleware()`. The `as never` cast may be needed depending on
+> your `createStart` type parameters; if your TS setup infers the builder type
+> directly, omit it.
 
 The `flarelog()` factory auto-detects environment, release, and serverName.
 
 ## Installation
 
 ```bash
-npm install @flarelog/sdk
+npm install @flarelog/sdk @tanstack/react-start
 ```
 
 ## Middleware Setup
 
-### Basic Middleware
+### Global Request Middleware
+
+Runs before every request handled by Start — server routes, SSR, and server
+functions. Define it in `src/start.ts`:
 
 ```typescript
+// src/start.ts
+import { createStart } from "@tanstack/react-start";
 import { flarelog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY! });
 
-// Register middleware in your TanStack Start app
-export default createApp({
-  middleware: [tanstackStartMiddleware(logger)],
-});
+export const startInstance = createStart(() => ({
+  requestMiddleware: [tanstackStartMiddleware(logger) as never],
+}));
 ```
 
-### Using the Logger in Routes
+> If you define `src/start.ts`, also add `createCsrfMiddleware()` explicitly —
+> Start only auto-installs CSRF protection when no `src/start.ts` exists.
+
+### Per-Route Middleware
 
 ```typescript
-import { createRoute } from "@tanstack/start";
+import { createFileRoute } from "@tanstack/react-router";
+import { flarelog } from "@flarelog/sdk";
+import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 
-export const Route = createRoute({
-  path: "/api/users/$id",
-  loader: async ({ params, context }) => {
-    // Access the logger from context
-    const logger = context.get("logger");
-    
-    logger.info("Fetching user", { userId: params.id });
-    
-    const user = await db.users.findById(params.id);
-    
-    if (!user) {
-      logger.warn("User not found", { userId: params.id });
-      throw new Error("User not found");
-    }
-    
-    logger.info("User fetched", { userId: user.id });
-    return { user };
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY! });
+
+export const Route = createFileRoute("/api/users/$id")({
+  server: {
+    middleware: [tanstackStartMiddleware(logger) as never],
+    handlers: {
+      GET: async ({ context }) => {
+        // context.logger is the FlareLog child logger
+        context.logger.info("Fetching user");
+        return new Response(JSON.stringify({ ok: true }));
+      },
+    },
   },
 });
 ```
 
-### API Routes with Wrapper
+### Per Server Function Middleware
 
 ```typescript
+import { createServerFn } from "@tanstack/react-start";
 import { flarelog } from "@flarelog/sdk";
-import { withTanStackStart } from "@flarelog/sdk/tanstack-start";
+import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY! });
 
-export default withTanStackStart(logger, async (ctx) => {
-  const logger = ctx.get("logger");
-  
-  logger.info("Processing API request");
-  
-  try {
-    const data = await fetchData();
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    logger.logError(err, { message: "API request failed" });
-    return new Response(JSON.stringify({ error: "Internal error" }), {
-      status: 500,
-    });
-  }
+export const getUser = createServerFn({ method: "GET" })
+  .middleware([tanstackStartMiddleware(logger) as never])
+  .handler(async ({ context }) => {
+    context.logger.info("getUser called");
+    return { id: 1, name: "Ada" };
+  });
+```
+
+### Using the Logger in Handlers
+
+The middleware merges `logger` (a `FlareLogChild`) and `traceId` into the
+downstream context. Access them directly on `context`:
+
+```typescript
+export const Route = createFileRoute("/api/orders/$id")({
+  server: {
+    middleware: [tanstackStartMiddleware(logger) as never],
+    handlers: {
+      GET: async ({ context, params }) => {
+        const orderLogger = context.logger.child({ operation: "fetch-order" });
+        orderLogger.info("Fetching order", { orderId: params.id });
+
+        const order = await db.orders.find(params.id);
+        if (!order) {
+          orderLogger.warn("Order not found", { orderId: params.id });
+          return new Response("Not Found", { status: 404 });
+        }
+
+        orderLogger.info("Order fetched", { orderId: order.id });
+        return Response.json(order);
+      },
+    },
+  },
 });
 ```
 
@@ -97,14 +128,17 @@ export default withTanStackStart(logger, async (ctx) => {
 ### Request Completion
 
 Every request is logged with:
-- **Trace ID**: From `x-trace-id` header or auto-generated UUID
-- **Method**: HTTP method (GET, POST, etc.)
-- **Path**: Request URL path
-- **Status**: HTTP status code
-- **Duration**: Request duration in milliseconds
-- **IP**: Client IP address (if available)
 
-### Log Levels by Status Code
+- **Trace ID**: From `x-trace-id` request header or auto-generated UUID
+- **Method**: HTTP method (GET, POST, etc.)
+- **Path**: Request URL pathname
+- **Duration**: Request duration in milliseconds
+- **Status** (when available): TanStack Start exposes status setters
+  (`setResponseStatus`) but not a status reader from within request
+  middleware. When the `next()` result carries a numeric `status`, it is used
+  for log-level mapping; otherwise completion logs at INFO.
+
+### Log Levels by Status Code (when status is available)
 
 | Status Range | Log Level |
 |-------------|-----------|
@@ -114,105 +148,48 @@ Every request is logged with:
 
 ### Error Capture
 
-Unhandled errors are automatically captured with:
+Unhandled errors thrown downstream are automatically captured with:
+
 - Full error stack trace
 - Request context (method, path, traceId)
 - Duration at point of failure
+
+The error is re-thrown after logging so TanStack Start's normal error handling
+still runs.
 
 ## Child Loggers
 
 Create contextual loggers for specific operations:
 
 ```typescript
-export const Route = createRoute({
-  path: "/api/orders",
-  loader: async ({ context }) => {
-    const logger = context.get("logger");
-    
-    // Create a child logger for order processing
-    const orderLogger = logger.child({
-      source: "order-service",
-      operation: "create-order",
-    });
-    
-    orderLogger.info("Creating order");
-    
-    try {
-      const order = await createOrder();
-      orderLogger.info("Order created", { orderId: order.id });
-      return { order };
-    } catch (err) {
-      orderLogger.logError(err, { message: "Order creation failed" });
-      throw err;
-    }
-  },
+context.logger.child({ source: "order-service", operation: "create-order" });
+```
+
+## Custom Trace ID Header
+
+The middleware reads `x-trace-id`. To use a different header, wrap with a
+small custom middleware that sets it on the request before delegating:
+
+```typescript
+import { createMiddleware } from "@tanstack/react-start";
+
+const renameTraceHeader = createMiddleware().server(async ({ next, request }) => {
+  // TanStack Start's request is a Web Request; mutate via headers construction
+  // if needed, or simply read the alt header in a custom logger middleware.
+  return next();
 });
 ```
 
-## Advanced Configuration
-
-### Custom Trace ID Header
+## Adding User Context
 
 ```typescript
-app.use(async (ctx, next) => {
-  // Use a custom trace ID header
-  const traceId = ctx.request.headers["x-request-id"] || crypto.randomUUID();
-  ctx.set("traceId", traceId);
-  
-  await next();
-});
-```
-
-### Adding User Context
-
-```typescript
-export const Route = createRoute({
-  path: "/api/protected",
+export const Route = createFileRoute("/api/protected")({
   beforeLoad: async ({ context }) => {
-    const logger = context.get("logger");
     const user = await getUser();
-    
     if (user) {
-      logger.setUser({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      });
+      context.logger.setUser({ id: user.id, email: user.email, name: user.name });
     }
-    
     return { user };
-  },
-});
-```
-
-### Breadcrumbs
-
-```typescript
-export const Route = createRoute({
-  path: "/api/checkout",
-  loader: async ({ context }) => {
-    const logger = context.get("logger");
-    
-    logger.addBreadcrumb({
-      category: "checkout",
-      message: "Starting checkout flow",
-      data: { cartId: "cart_123" },
-    });
-    
-    // Validate cart
-    logger.addBreadcrumb({
-      category: "checkout",
-      message: "Cart validated",
-    });
-    
-    // Process payment
-    logger.addBreadcrumb({
-      category: "payment",
-      message: "Payment initiated",
-    });
-    
-    const result = await processPayment();
-    return result;
   },
 });
 ```
@@ -239,24 +216,25 @@ export const logger = flarelog({
 
 ## Best Practices
 
-1. **Always use context logger**: Access logger via `ctx.get("logger")` to maintain trace context
-2. **Log early**: Log at the start of loaders and actions
-3. **Include IDs**: Add userId, orderId, etc. to every log
-4. **Use child loggers**: Create scoped loggers for complex operations
-5. **Set user context**: Identify authenticated users when possible
-6. **Add breadcrumbs**: Track multi-step operations
-7. **Handle errors**: Use `logError()` for structured error reporting
+1. **Always use the context logger**: Access via `context.logger` to keep trace
+   context. Do not import the root logger into handlers.
+2. **Log early**: Log at the start of loaders and handlers.
+3. **Include IDs**: Add userId, orderId, etc. to every log.
+4. **Use child loggers**: Create scoped loggers for complex operations.
+5. **Set user context**: Identify authenticated users when possible.
+6. **Add breadcrumbs**: Track multi-step operations.
+7. **Handle errors**: Use `logError()` for structured error reporting.
 
 ## Integration with React
 
-Combine with React Error Boundary for full-stack coverage:
+Combine with the React Error Boundary for full-stack coverage:
 
 ```tsx
 // app.tsx
 import { FlareLogErrorBoundary } from "@flarelog/sdk/react";
 import { flarelog } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY! });
 
 export default function App() {
   return (
@@ -269,11 +247,23 @@ export default function App() {
 
 ## TypeScript Support
 
-Full TypeScript support with inline types - no `@tanstack/start` dependency required:
+`@tanstack/react-start` is an optional peer dependency. When installed,
+TypeScript resolves the middleware builder types against the real package.
+The SDK exports a loosely-typed return from `tanstackStartMiddleware` so it
+composes with `createStart`, `createFileRoute`, and `createServerFn`
+middleware arrays without forcing a specific builder type.
+
+## Migration from `withTanStackStart`
+
+The previous `withTanStackStart(logger, handler)` wrapper was built against an
+`app.use`-style API that TanStack Start does not provide. It is now a
+deprecated stub that throws on invocation. Migrate to:
 
 ```typescript
-import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
-
-// Types are included automatically
-app.use(tanstackStartMiddleware(logger));
+createServerFn()
+  .middleware([tanstackStartMiddleware(logger) as never])
+  .handler(async ({ context }) => {
+    context.logger.info("Processing");
+    return /* ... */;
+  });
 ```

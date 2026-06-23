@@ -1,139 +1,134 @@
 import type { FlareLog, FlareLogChild } from "../client";
+import { createMiddleware } from "@tanstack/react-start";
 
-interface Request {
-  headers: Record<string, string | string[] | undefined>;
+type RequestLike = {
   method: string;
   url: string;
-  ip?: string;
-}
+  headers: {
+    get(name: string): string | null;
+  };
+};
 
-interface Response {
-  status: number;
-  statusText: string;
-  headers: Headers;
-}
-
-interface Context {
-  request: Request;
-  response: Response;
-  set(key: string, value: unknown): void;
-  get(key: string): unknown;
-}
-
-interface NextFunction {
-  (): Promise<void>;
-}
-
-// Extended context passed to withTanStackStart handlers
-interface TanStackContext extends Context {
-  logger: FlareLogChild; // Fixed: Changed from FlareLog to FlareLogChild
-  traceId: string;
-}
-
-// ─── Shared setup ────────────────────────────────────────────────────────────
-
-function resolveTraceId(headers: Request["headers"]): string {
-  const raw = headers["x-trace-id"];
-  if (Array.isArray(raw)) return raw[0] ?? crypto.randomUUID();
+function resolveTraceId(request: RequestLike): string {
+  const raw = request.headers.get("x-trace-id");
   return raw ?? crypto.randomUUID();
 }
 
-function resolveLevel(status: number): "ERROR" | "WARN" | "INFO" {
+function resolveLevel(status: number | undefined): "ERROR" | "WARN" | "INFO" {
+  if (status === undefined) return "INFO";
   if (status >= 500) return "ERROR";
   if (status >= 400) return "WARN";
   return "INFO";
 }
 
-function createChildLogger(logger: FlareLog, ctx: Context, traceId: string): FlareLogChild {
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
+function createChildLogger(
+  logger: FlareLog,
+  request: RequestLike,
+  traceId: string,
+): FlareLogChild {
   return logger.child({
     source: "tanstack-start",
     traceId,
-    method: ctx.request.method,
-    path: ctx.request.url,
-    ip: ctx.request.ip,
+    method: request.method,
+    path: pathOf(request.url),
   });
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 /**
- * TanStack Start middleware for automatic request logging.
+ * TanStack Start request middleware for automatic request logging.
  *
- * Attaches `ctx.get("logger")` with request context, logs completion
- * with duration and status, and auto-generates a traceId.
+ * Composes with TanStack Start's real `createMiddleware()` from
+ * `@tanstack/react-start`. Register it globally in `src/start.ts` via
+ * `createStart(() => ({ requestMiddleware: [tanstackStartMiddleware(logger)] }))`,
+ * per-route via `createFileRoute(...)({ server: { middleware: [...] } })`, or
+ * per server function via `createServerFn().middleware([...])`.
+ *
+ * Attaches `context.logger` (a child logger with traceId/method/path) and
+ * `context.traceId` to the downstream context, logs request completion with
+ * duration, and captures thrown errors.
+ *
+ * Note: TanStack Start does not expose a response status reader from within
+ * request middleware (only setters like `setResponseStatus`). When `next()`
+ * returns a result carrying a numeric `status` field it is used for level
+ * mapping; otherwise completion is logged at INFO.
  *
  * @example
  * ```typescript
- * const logger = flarelog({ apiKey });
- * app.use(tanstackStartMiddleware(logger));
+ * // src/start.ts
+ * import { createStart } from "@tanstack/react-start";
+ * import { flarelog } from "@flarelog/sdk";
+ * import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
+ *
+ * const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY! });
+ *
+ * export const startInstance = createStart(() => ({
+ *   requestMiddleware: [tanstackStartMiddleware(logger)],
+ * }));
  * ```
  */
-export function tanstackStartMiddleware(logger: FlareLog) {
-  return async (ctx: Context, next: NextFunction) => {
-    const traceId = resolveTraceId(ctx.request.headers);
-    const child = createChildLogger(logger, ctx, traceId);
-    ctx.set("logger", child);
+export function tanstackStartMiddleware(logger: FlareLog): unknown {
+  return createMiddleware().server(async ({ next, request }) => {
+    const req = request as unknown as RequestLike;
+    const traceId = resolveTraceId(req);
+    const child = createChildLogger(logger, req, traceId);
 
     const start = Date.now();
     try {
-      await next();
-      const duration = Date.now() - start;
-      const status = ctx.response.status;
-      child.log(resolveLevel(status), "Request completed", { status, durationMs: duration });
-    } catch (err) {
-      child.logError(err, {
-        message: "Request failed",
-        metadata: { durationMs: Date.now() - start },
+      const result = await next({
+        context: { logger: child, traceId },
       });
-      throw err;
-    }
-  };
-}
-
-// ─── Route wrapper ────────────────────────────────────────────────────────────
-
-/**
- * TanStack Start API route wrapper with automatic logging.
- *
- * Passes an extended context with `logger` and `traceId` to the handler,
- * logs completion with duration and status, and captures errors automatically.
- *
- * @example
- * ```typescript
- * const logger = flarelog({ apiKey });
- *
- * export default withTanStackStart(logger, async (ctx) => {
- * ctx.logger.info("Processing request");
- * return new Response(JSON.stringify(await fetchData()));
- * });
- * ```
- */
-export function withTanStackStart<T>(
-  logger: FlareLog,
-  handler: (ctx: TanStackContext) => Promise<T>
-) {
-  return async (ctx: Context) => {
-    const traceId = resolveTraceId(ctx.request.headers);
-    const child = createChildLogger(logger, ctx, traceId);
-    ctx.set("logger", child);
-
-    const extCtx: TanStackContext = Object.assign(ctx, { logger: child, traceId });
-
-    const start = Date.now();
-    try {
-      const result = await handler(extCtx);
       const duration = Date.now() - start;
-      // Read status from ctx.response, not the result — avoids false positives
-      // on result objects that incidentally carry a `status` field.
-      const status = ctx.response.status ?? 200;
-      child.log(resolveLevel(status), "API request completed", { status, durationMs: duration });
+      const status =
+        typeof (result as { status?: unknown })?.status === "number"
+          ? (result as { status: number }).status
+          : undefined;
+      child.log(
+        resolveLevel(status),
+        "Request completed",
+        { status, durationMs: duration },
+      );
       return result;
     } catch (err) {
+      const duration = Date.now() - start;
       child.logError(err, {
-        message: "API request failed",
-        metadata: { durationMs: Date.now() - start },
+        message: "Request failed",
+        metadata: { durationMs: duration },
       });
       throw err;
     }
+  });
+}
+
+// ─── Deprecated wrapper ───────────────────────────────────────────────────────
+
+/**
+ * @deprecated `withTanStackStart` was built against a `app.use`-style API that
+ * TanStack Start does not provide. It is retained only to surface a clear
+ * migration error. Use `createServerFn().middleware([tanstackStartMiddleware(logger)])`
+ * for per-server-function logging, or register `tanstackStartMiddleware`
+ * globally via `createStart` in `src/start.ts`.
+ *
+ * @throws Always throws on invocation.
+ */
+export function withTanStackStart<T>(
+  _logger: FlareLog,
+  _handler: (ctx: unknown) => Promise<T>,
+): (ctx: unknown) => Promise<T> {
+  return async () => {
+    throw new Error(
+      "withTanStackStart is unsupported. TanStack Start has no `app.use` API. " +
+        "Use createServerFn().middleware([tanstackStartMiddleware(logger)]) or " +
+        "register tanstackStartMiddleware via createStart({ requestMiddleware: [...] }).",
+    );
   };
 }
