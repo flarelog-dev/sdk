@@ -75,7 +75,15 @@ wrangler secret put FLARELOG_API_KEY
 ```
 
 ```typescript
+import { flarelog } from "@flarelog/sdk";
 const logger = flarelog({}); // auto-detects FLARELOG_API_KEY
+```
+
+or you can pass the API key directly:
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+const logger = flarelog({ apiKey: "fl_your_key" });
 ```
 
 That's it. Logs, errors, and CPU metrics appear in your dashboard on the next request.
@@ -301,7 +309,7 @@ v2 is a breaking change.
 
 | | Free | Pro |
 |---|---|---|
-| Requests/mo | 100k | 2M |
+| Requests/mo | 10k | 2M |
 | Log retention | 7 day | 90 days |
 | Error tracking | ✅ | ✅ |
 | Cost Burn Dashboard | — | ✅ |
