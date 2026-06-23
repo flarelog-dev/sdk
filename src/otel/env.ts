@@ -128,12 +128,22 @@ export function detectFlarelogEnv(): FlarelogEnvConfig {
 /**
  * Runtime detection — what platform are we running on?
  */
-export type Runtime = "cloudflare-workers" | "node" | "browser" | "deno" | "bun" | "unknown";
+export type Runtime = "cloudflare-workers" | "vercel" | "node" | "browser" | "deno" | "bun" | "unknown";
 
 export function detectRuntime(): Runtime {
   try {
     if (typeof navigator !== "undefined" && navigator.userAgent?.includes("Cloudflare-Workers")) {
       return "cloudflare-workers";
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    // Vercel sets process.env.VERCEL = "1"
+    const proc = (globalThis as { process?: { version?: string; env?: Record<string, string | undefined> } }).process;
+    if (proc?.env && proc.env["VERCEL"] === "1") {
+      return "vercel";
     }
   } catch {
     /* ignore */

@@ -1,8 +1,8 @@
 # @flarelog/sdk
 
-**The observability layer Cloudflare Workers actually needed.**
+**Observability that follows your request across the Cloudflare boundary.**
 
-Drop-in SDK. Three env vars. Your Workers logs, errors, and cost data — live in the [FlareLog dashboard](https://flarelog.dev) in under 5 minutes.
+> Zero-dependency SDK for Cloudflare Workers. Ships logs, errors, and W3C-propagated traces to FlareLog or any OTLP backend — so a request that starts in a Worker and continues to your origin, a third-party API, or another cloud stays on one trace.
 
 [![npm version](https://img.shields.io/npm/v/@flarelog/sdk)](https://www.npmjs.com/package/@flarelog/sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -13,18 +13,35 @@ Drop-in SDK. Three env vars. Your Workers logs, errors, and cost data — live i
 
 **[FlareLog dashboard →](https://flarelog.dev)**
 
+- **Error Tracker** — auto-grouped issues with stack traces, first seen / last seen, occurrence count, and one-click silence
+- **Cross-boundary traces** — W3C `traceparent` injected on every outbound `fetch()`, so traces don't break at the Cloudflare edge
+- **Cost Burn Dashboard** _(Pro)_ — CPU time, request volume, and projected spend per Worker per day
+- **90-day retention** _(Pro)_ — for incident retrospectives and compliance; Cloudflare caps at 7
+- **Alerts** — Slack or email when a new error fingerprint appears or error rate spikes
 - **Log Explorer** — full-text search across all your Workers logs, filter by service / environment / status
-- **Error Tracker** — auto-grouped issues with stack traces, first seen / last seen, one-click silence
-- **Cost Burn Dashboard** *(Pro)* — CPU time, request volume, and projected spend per Worker per day. Know which Worker is eating your budget before the bill arrives.
-- **Alerts** — notify on Slack or email when a new error fingerprint appears or error rate spikes
 - **MCP server** — query production logs in-context from Cursor, Claude Desktop, or Lovable Agent
 
-> Built on OpenTelemetry — also ships to Grafana Cloud, Honeycomb, Datadog, or any OTLP backend. [See fan-out config →](#fan-out)
+> Speaks OTLP — also ships to Grafana Cloud, Honeycomb, Datadog, or any OTLP backend. [See fan-out config →](#fan-out)
+
+---
+
+## Why not just use Cloudflare's built-in observability?
+
+Cloudflare's native Workers Logs and Workers Tracing are good and getting better — if your Worker is the entire request, you may not need FlareLog. Use FlareLog when:
+
+- **Your request doesn't end at the Worker.** Cloudflare's tracing (open beta) does not propagate trace IDs to services outside Cloudflare, so traces break the moment you `fetch()` your origin or a third-party API. FlareLog emits W3C `traceparent` on every outbound call, so the trace continues end-to-end.
+- **You need to time business logic, not just I/O.** Cloudflare's auto-tracing only covers platform bindings, and non-I/O spans report 0 ms due to Spectre mitigations. FlareLog's `startSpan()` times your actual code.
+- **You want Sentry-style error tracking.** Cloudflare shows errors as log lines. FlareLog auto-groups them into issues with first-seen / last-seen / occurrence count and one-click silence — and alerts you on Slack or email when a new fingerprint appears.
+- **You need more than 7 days.** Cloudflare's retention is a hard 7-day cap. FlareLog Pro keeps 90 days for incident retrospectives and compliance.
+- **You're on the Workers Free plan.** Cloudflare's OTel export and Logpush both require Workers Paid. FlareLog ships via OTLP/HTTP from inside the Worker, so fan-out to Grafana / Honeycomb / Datadog works on Free.
+
+If none of those apply, Cloudflare's built-in observability is genuinely fine — use it and don't add a dependency.
 
 ---
 
 ## Table of Contents
 
+- [Why Zero Dependencies?](#why-zero-dependencies)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Dashboard Setup](#dashboard-setup)
@@ -36,6 +53,23 @@ Drop-in SDK. Three env vars. Your Workers logs, errors, and cost data — live i
 - [API Reference](#api-reference)
 - [Migrating from v1](#migrating-from-v1)
 - [Pricing](#pricing)
+
+---
+
+## Why Zero Dependencies?
+
+If you use a generic OpenTelemetry SDK in a Worker, you typically pull in `@opentelemetry/api` and Node modules (`async_hooks`, `os`, `diagnostics_channel`), forcing `nodejs_compat` and bloating your bundle with polyfills.
+
+FlareLog implements the parts of OTel that matter — OTLP wire format, W3C trace context, severity numbers, resource attributes — directly in TypeScript. The result:
+
+- **Zero runtime dependencies** — nothing to audit, nothing to conflict
+- **No `nodejs_compat` needed** — works natively on Workers
+- **Tiny bundle** — ~9.5 kB gzipped (tracked per release)
+- **OTLP-compatible** — ships to Grafana Cloud, Honeycomb, Datadog, or any OTLP/HTTP backend
+
+> Note: Cloudflare's native tracing also needs no SDK and no `nodejs_compat`. Zero-dep is a wedge against other third-party OTel libraries (like `@opentelemetry/api` or `evanderkoogh/otel-cf-workers`), not against Cloudflare native.
+
+If you need full OpenTelemetry ecosystem interoperability (e.g. automatic correlation with `@opentelemetry/instrumentation-*` packages), see [OTel Bridge Mode](#otel-bridge-mode) below.
 
 ---
 
@@ -75,7 +109,15 @@ wrangler secret put FLARELOG_API_KEY
 ```
 
 ```typescript
+import { flarelog } from "@flarelog/sdk";
 const logger = flarelog({}); // auto-detects FLARELOG_API_KEY
+```
+
+or pass the API key directly:
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+const logger = flarelog({ apiKey: "fl_your_key" });
 ```
 
 That's it. Logs, errors, and CPU metrics appear in your dashboard on the next request.
@@ -105,12 +147,12 @@ Add to your `mcp_config.json`:
 
 ### Available tools
 
-| Tool | What it does |
-|---|---|
-| `get_recent_errors` | Fetch latest errors for a service |
-| `search_logs` | Full-text search across logs |
-| `get_issue` | Full detail on a specific issue by ID |
-| `list_services` | List all Workers in your project |
+| Tool                | What it does                          |
+| ------------------- | ------------------------------------- |
+| `get_recent_errors` | Fetch latest errors for a service     |
+| `search_logs`       | Full-text search across logs          |
+| `get_issue`         | Full detail on a specific issue by ID |
+| `list_services`     | List all Workers in your project      |
 
 ---
 
@@ -118,21 +160,21 @@ Add to your `mcp_config.json`:
 
 ### Flarelog env vars
 
-| Variable | Purpose |
-|---|---|
-| `FLARELOG_API_KEY` | Enables the FlareLog hosted dashboard |
+| Variable            | Purpose                                             |
+| ------------------- | --------------------------------------------------- |
+| `FLARELOG_API_KEY`  | Enables the FlareLog hosted dashboard               |
 | `FLARELOG_ENDPOINT` | Override endpoint (default: `https://flarelog.dev`) |
 
 ### Standard OTel env vars (optional)
 
-| Variable | Purpose |
-|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Ship to any OTLP/HTTP backend |
-| `OTEL_EXPORTER_OTLP_HEADERS` | Auth headers, e.g. `Authorization=Basic xxx` |
-| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | Override endpoint for logs only |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Override endpoint for traces only |
-| `OTEL_SERVICE_NAME` | `service.name` resource attribute |
-| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes (`key=value,key=value`) |
+| Variable                             | Purpose                                           |
+| ------------------------------------ | ------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`        | Ship to any OTLP/HTTP backend                     |
+| `OTEL_EXPORTER_OTLP_HEADERS`         | Auth headers, e.g. `Authorization=Basic xxx`      |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`   | Override endpoint for logs only                   |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Override endpoint for traces only                 |
+| `OTEL_SERVICE_NAME`                  | `service.name` resource attribute                 |
+| `OTEL_RESOURCE_ATTRIBUTES`           | Extra resource attributes (`key=value,key=value`) |
 
 ### `flarelog(config?)` factory
 
@@ -140,9 +182,9 @@ All fields are optional — env vars are auto-detected.
 
 ```typescript
 const logger = flarelog({
-  apiKey: "fl_your_key",       // or FLARELOG_API_KEY
+  apiKey: "fl_your_key", // or FLARELOG_API_KEY
   otlpEndpoint: "https://...", // or OTEL_EXPORTER_OTLP_ENDPOINT
-  serviceName: "my-app",       // or OTEL_SERVICE_NAME
+  serviceName: "my-app", // or OTEL_SERVICE_NAME
   environment: "production",
 });
 ```
@@ -191,7 +233,38 @@ app.use(expressMiddleware(logger));
 app.use(expressErrorHandler(logger));
 ```
 
-See [framework guides](./docs/) for Next.js, React, and TanStack Start.
+See [framework guides](./docs/) for Next.js, React, TanStack Start, and Vercel.
+
+### Vercel
+
+#### Serverless Functions
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { withVercelServerless } from "@flarelog/sdk/vercel";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+
+export default withVercelServerless(logger, async (req, res) => {
+  req.logger.info("Processing request");
+  res.json({ ok: true });
+});
+```
+
+#### Edge Functions / Middleware
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { withVercelEdge } from "@flarelog/sdk/vercel";
+
+export const config = { runtime: "edge" };
+
+const logger = flarelog({});
+
+export default withVercelEdge(logger, async (request) => {
+  return new Response("Hello from the edge!");
+});
+```
 
 ---
 
@@ -278,14 +351,14 @@ logger.tracerProvider.addSpanProcessor(myCustomProcessor);
 
 v2 is a breaking change.
 
-| v1 | v2 |
-|---|---|
-| `apiKey` required | `apiKey` optional — defaults to console |
+| v1                                          | v2                                        |
+| ------------------------------------------- | ----------------------------------------- |
+| `apiKey` required                           | `apiKey` optional — defaults to console   |
 | Custom HTTP format (`/api/trpc/log.ingest`) | OTLP/HTTP JSON (`/v1/logs`, `/v1/traces`) |
-| Single backend (Flarelog) | Multi-transport fan-out |
-| Custom trace ID header (`x-trace-id`) | W3C `traceparent` |
-| `workerFetch()` emits log messages | `workerFetch()` emits OTel SERVER spans |
-| No resource attributes | `service.name`, `cloud.provider`, etc. |
+| Single backend (Flarelog)                   | Multi-transport fan-out                   |
+| Custom trace ID header (`x-trace-id`)       | W3C `traceparent`                         |
+| `workerFetch()` emits log messages          | `workerFetch()` emits OTel SERVER spans   |
+| No resource attributes                      | `service.name`, `cloud.provider`, etc.    |
 
 **Steps:**
 
@@ -299,15 +372,17 @@ v2 is a breaking change.
 
 ## Pricing
 
-| | Free | Pro |
-|---|---|---|
-| Requests/mo | 100k | 2M |
-| Log retention | 7 day | 90 days |
-| Error tracking | ✅ | ✅ |
-| Cost Burn Dashboard | — | ✅ |
-| MCP server | ✅ | ✅ |
-| Alerts | ✅ | ✅ |
-| Price | $0 | $19/mo |
+Cloudflare's native logs cost $0.60/million events with a 7-day cap. FlareLog Pro is $19/mo for 2M requests with 90-day retention, error tracking, alerts, and the cost-burn dashboard included. Use FlareLog when 7 days isn't enough or when you need error tracking and cross-boundary tracing Cloudflare doesn't provide.
+
+|                     | Free  | Pro     |
+| ------------------- | ----- | ------- |
+| Requests/mo         | 10k   | 2M      |
+| Log retention       | 7 day | 90 days |
+| Error tracking      | ✅    | ✅      |
+| Cost Burn Dashboard | —     | ✅      |
+| MCP server          | ✅    | ✅      |
+| Alerts              | ✅    | ✅      |
+| Price               | $0    | $19/mo  |
 
 **[Start free → flarelog.dev](https://flarelog.dev)**
 

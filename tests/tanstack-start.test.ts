@@ -1,9 +1,58 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FlareLog } from "../src/client";
-import { tanstackStartMiddleware, withTanStackStart } from "../src/frameworks/tanstack-start";
 import { mockFetch } from "./helpers";
 
-describe("tanstack-start middleware", () => {
+// Mock @tanstack/react-start (an optional peer dep not installed in this repo).
+// The mock captures the `.server(fn)` callback so tests can invoke it directly
+// with a synthesized middleware context.
+vi.mock("@tanstack/react-start", () => {
+  const builder = {
+    _serverFn: null as ((ctx: unknown) => Promise<unknown>) | null,
+    server(fn: (ctx: unknown) => Promise<unknown>) {
+      this._serverFn = fn;
+      return this;
+    },
+    middleware() {
+      return this;
+    },
+    client() {
+      return this;
+    },
+    validator() {
+      return this;
+    },
+  };
+  return {
+    createMiddleware: () => builder,
+  };
+});
+
+import {
+  tanstackStartMiddleware,
+  withTanStackStart,
+} from "../src/frameworks/tanstack-start";
+
+interface BuilderStub {
+  _serverFn: ((ctx: unknown) => Promise<unknown>) | null;
+}
+
+function makeLogger() {
+  return new FlareLog({
+    apiKey: "test-key",
+    endpoint: "http://localhost:9999",
+    allowInsecure: true,
+    workerMode: true,
+  });
+}
+
+function makeRequest(headers: Record<string, string> = {}): Request {
+  return new Request("https://example.test/api/test", {
+    method: "GET",
+    headers,
+  });
+}
+
+describe("tanstackStartMiddleware", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -15,100 +64,73 @@ describe("tanstack-start middleware", () => {
     vi.restoreAllMocks();
   });
 
-  it("should attach logger and log request completion", async () => {
-    const logger = new FlareLog({
-      apiKey: "test-key",
-      endpoint: "http://localhost:9999",
-      allowInsecure: true,
-      workerMode: true,
-    });
-
-    const ctx = {
-      request: {
-        headers: {},
-        method: "GET",
-        url: "/test",
-      },
-      response: {
-        status: 200,
-        statusText: "OK",
-        headers: new Headers(),
-      },
-      set: vi.fn(),
-      get: vi.fn(),
-    };
-
-    const next = vi.fn().mockResolvedValue(undefined);
-
-    const middleware = tanstackStartMiddleware(logger);
-    await middleware(ctx as any, next);
-
-    expect(ctx.set).toHaveBeenCalledWith("logger", expect.anything());
-    expect(next).toHaveBeenCalled();
+  it("builds a middleware via createMiddleware().server(...)", () => {
+    const middleware = tanstackStartMiddleware(makeLogger()) as unknown as BuilderStub;
+    expect(typeof middleware._serverFn).toBe("function");
   });
 
-  it("should log errors", async () => {
-    const logger = new FlareLog({
-      apiKey: "test-key",
-      endpoint: "http://localhost:9999",
-      allowInsecure: true,
-      workerMode: true,
+  it("merges logger and traceId into context via next() and logs completion", async () => {
+    const logger = makeLogger();
+    const childLogSpy = vi.spyOn(logger, "child");
+
+    const middleware = tanstackStartMiddleware(logger) as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+
+    const nextResult = { status: 200, context: {} };
+    const next = vi.fn().mockResolvedValue(nextResult);
+
+    const result = await serverFn({
+      request: makeRequest({ "x-trace-id": "trace-abc" }),
+      context: {},
+      next,
     });
 
-    const ctx = {
-      request: {
-        headers: {},
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith({
+      context: expect.objectContaining({ traceId: "trace-abc" }),
+    });
+    // child logger was created with trace context
+    expect(childLogSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "tanstack-start",
+        traceId: "trace-abc",
         method: "GET",
-        url: "/test",
-      },
-      response: {
-        status: 200,
-        statusText: "OK",
-        headers: new Headers(),
-      },
-      set: vi.fn(),
-      get: vi.fn(),
-    };
+      }),
+    );
+    expect(result).toBe(nextResult);
+  });
 
-    const error = new Error("Test error");
+  it("auto-generates a traceId when the header is missing", async () => {
+    const logger = makeLogger();
+    const middleware = tanstackStartMiddleware(logger) as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+
+    const next = vi.fn().mockResolvedValue({ status: 200, context: {} });
+    await serverFn({ request: makeRequest(), context: {}, next });
+
+    const passed = next.mock.calls[0][0] as { context: { traceId: string } };
+    expect(passed.context.traceId).toBeTruthy();
+    expect(typeof passed.context.traceId).toBe("string");
+  });
+
+  it("logs errors and rethrows", async () => {
+    const logger = makeLogger();
+    const middleware = tanstackStartMiddleware(logger) as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+
+    const error = new Error("boom");
     const next = vi.fn().mockRejectedValue(error);
 
-    const middleware = tanstackStartMiddleware(logger);
-    
-    await expect(middleware(ctx as any, next)).rejects.toThrow("Test error");
+    await expect(
+      serverFn({ request: makeRequest(), context: {}, next }),
+    ).rejects.toThrow("boom");
   });
 });
 
-describe("withTanStackStart", () => {
-  it("should wrap handler and log requests", async () => {
-    const logger = new FlareLog({
-      apiKey: "test-key",
-      endpoint: "http://localhost:9999",
-      allowInsecure: true,
-      workerMode: true,
-    });
-
-    const ctx = {
-      request: {
-        headers: {},
-        method: "GET",
-        url: "/api/test",
-      },
-      response: {
-        status: 200,
-        statusText: "OK",
-        headers: new Headers(),
-      },
-      set: vi.fn(),
-      get: vi.fn(),
-    };
-
-    const handler = vi.fn().mockResolvedValue(new Response("OK"));
-
-    const wrapped = withTanStackStart(logger, handler);
-    await wrapped(ctx as any);
-
-    expect(handler).toHaveBeenCalled();
-    expect(ctx.set).toHaveBeenCalledWith("logger", expect.anything());
+describe("withTanStackStart (deprecated)", () => {
+  it("throws a migration error on invocation", async () => {
+    const logger = makeLogger();
+    const wrapped = withTanStackStart(logger, async () => "ok");
+    await expect(wrapped({})).rejects.toThrow(/withTanStackStart is unsupported/);
   });
 });
