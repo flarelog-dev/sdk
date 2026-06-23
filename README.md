@@ -1,8 +1,8 @@
 # @flarelog/sdk
 
-**The observability layer Cloudflare Workers actually needed.**
+**Observability that follows your request across the Cloudflare boundary.**
 
-> Zero-dependency observability SDK for Cloudflare Workers. Ships logs, errors, and traces to FlareLog or any OTLP backend — no Node.js compatibility layer required.
+> Zero-dependency SDK for Cloudflare Workers. Ships logs, errors, and W3C-propagated traces to FlareLog or any OTLP backend — so a request that starts in a Worker and continues to your origin, a third-party API, or another cloud stays on one trace.
 
 [![npm version](https://img.shields.io/npm/v/@flarelog/sdk)](https://www.npmjs.com/package/@flarelog/sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -13,13 +13,29 @@
 
 **[FlareLog dashboard →](https://flarelog.dev)**
 
+- **Error Tracker** — auto-grouped issues with stack traces, first seen / last seen, occurrence count, and one-click silence
+- **Cross-boundary traces** — W3C `traceparent` injected on every outbound `fetch()`, so traces don't break at the Cloudflare edge
+- **Cost Burn Dashboard** _(Pro)_ — CPU time, request volume, and projected spend per Worker per day
+- **90-day retention** _(Pro)_ — for incident retrospectives and compliance; Cloudflare caps at 7
+- **Alerts** — Slack or email when a new error fingerprint appears or error rate spikes
 - **Log Explorer** — full-text search across all your Workers logs, filter by service / environment / status
-- **Error Tracker** — auto-grouped issues with stack traces, first seen / last seen, one-click silence
-- **Cost Burn Dashboard** _(Pro)_ — CPU time, request volume, and projected spend per Worker per day. Know which Worker is eating your budget before the bill arrives.
-- **Alerts** — notify on Slack or email when a new error fingerprint appears or error rate spikes
 - **MCP server** — query production logs in-context from Cursor, Claude Desktop, or Lovable Agent
 
 > Speaks OTLP — also ships to Grafana Cloud, Honeycomb, Datadog, or any OTLP backend. [See fan-out config →](#fan-out)
+
+---
+
+## Why not just use Cloudflare's built-in observability?
+
+Cloudflare's native Workers Logs and Workers Tracing are good and getting better — if your Worker is the entire request, you may not need FlareLog. Use FlareLog when:
+
+- **Your request doesn't end at the Worker.** Cloudflare's tracing (open beta) does not propagate trace IDs to services outside Cloudflare, so traces break the moment you `fetch()` your origin or a third-party API. FlareLog emits W3C `traceparent` on every outbound call, so the trace continues end-to-end.
+- **You need to time business logic, not just I/O.** Cloudflare's auto-tracing only covers platform bindings, and non-I/O spans report 0 ms due to Spectre mitigations. FlareLog's `startSpan()` times your actual code.
+- **You want Sentry-style error tracking.** Cloudflare shows errors as log lines. FlareLog auto-groups them into issues with first-seen / last-seen / occurrence count and one-click silence — and alerts you on Slack or email when a new fingerprint appears.
+- **You need more than 7 days.** Cloudflare's retention is a hard 7-day cap. FlareLog Pro keeps 90 days for incident retrospectives and compliance.
+- **You're on the Workers Free plan.** Cloudflare's OTel export and Logpush both require Workers Paid. FlareLog ships via OTLP/HTTP from inside the Worker, so fan-out to Grafana / Honeycomb / Datadog works on Free.
+
+If none of those apply, Cloudflare's built-in observability is genuinely fine — use it and don't add a dependency.
 
 ---
 
@@ -42,16 +58,20 @@
 
 ## Why Zero Dependencies?
 
-Cloudflare Workers runs on a V8 isolate — not Node.js. Most observability SDKs depend on `@opentelemetry/api`, which pulls in Node modules (`async_hooks`, `os`, `diagnostics_channel`). That forces you to enable `nodejs_compat` in your `wrangler.toml`, inflating your bundle with polyfills.
+If you use a generic OpenTelemetry SDK in a Worker, you typically pull in `@opentelemetry/api` and Node modules (`async_hooks`, `os`, `diagnostics_channel`), forcing `nodejs_compat` and bloating your bundle with polyfills.
 
-**FlareLog SDK is different.** We implement the parts of OpenTelemetry that matter — OTLP wire format, W3C trace context, severity numbers, resource attributes — directly in TypeScript. The result:
+FlareLog implements the parts of OTel that matter — OTLP wire format, W3C trace context, severity numbers, resource attributes — directly in TypeScript. The result:
 
 - **Zero runtime dependencies** — nothing to audit, nothing to conflict
 - **No `nodejs_compat` needed** — works natively on Workers
 - **Tiny bundle** — ~X KB minified (tracked per release)
 - **OTLP-compatible** — ships to Grafana Cloud, Honeycomb, Datadog, or any OTLP/HTTP backend
 
+> Note: Cloudflare's native tracing also needs no SDK and no `nodejs_compat`. Zero-dep is a wedge against other third-party OTel libraries (like `@opentelemetry/api` or `evanderkoogh/otel-cf-workers`), not against Cloudflare native.
+
 If you need full OpenTelemetry ecosystem interoperability (e.g. automatic correlation with `@opentelemetry/instrumentation-*` packages), see [OTel Bridge Mode](#otel-bridge-mode) below.
+
+---
 
 ## Installation
 
@@ -93,7 +113,7 @@ import { flarelog } from "@flarelog/sdk";
 const logger = flarelog({}); // auto-detects FLARELOG_API_KEY
 ```
 
-or you can pass the API key directly:
+or pass the API key directly:
 
 ```typescript
 import { flarelog } from "@flarelog/sdk";
@@ -320,6 +340,8 @@ v2 is a breaking change.
 ---
 
 ## Pricing
+
+Cloudflare's native logs cost $0.60/million events with a 7-day cap. FlareLog Pro is $19/mo for 2M requests with 90-day retention, error tracking, alerts, and the cost-burn dashboard included. Use FlareLog when 7 days isn't enough or when you need error tracking and cross-boundary tracing Cloudflare doesn't provide.
 
 |                     | Free  | Pro     |
 | ------------------- | ----- | ------- |
