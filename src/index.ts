@@ -6,6 +6,15 @@ export { flarelog } from "./factory";
 
 // Framework helpers
 export { workerFetch } from "./frameworks/cf-workers";
+export {
+  withVercelServerless,
+  withVercelEdge,
+  detectVercelEnv,
+} from "./frameworks/vercel";
+export type {
+  VercelServerlessHandler,
+  VercelEdgeHandler,
+} from "./frameworks/vercel";
 
 // OTel-native exports
 export { ConsoleTransport } from "./otel/console-transport";

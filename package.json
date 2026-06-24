@@ -1,10 +1,12 @@
 {
   "name": "@flarelog/sdk",
-  "version": "2.0.10",
+  "version": "2.1.0",
   "description": "Zero-config logging SDK for Cloudflare Workers and Node.js. Send logs to FlareLog with minimal setup.",
   "keywords": [
     "logging",
     "cloudflare-workers",
+    "vercel",
+    "serverless",
     "edge",
     "observability",
     "logs"
@@ -85,6 +87,16 @@
       "require": {
         "types": "./dist/frameworks/cf-workers.d.cts",
         "default": "./dist/frameworks/cf-workers.cjs"
+      }
+    },
+    "./vercel": {
+      "import": {
+        "types": "./dist/frameworks/vercel.d.ts",
+        "default": "./dist/frameworks/vercel.js"
+      },
+      "require": {
+        "types": "./dist/frameworks/vercel.d.cts",
+        "default": "./dist/frameworks/vercel.cjs"
       }
     }
   },

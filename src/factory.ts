@@ -13,13 +13,24 @@ function detectEnvironmentDefaults(): Partial<FlareLogConfig> {
     const proc = (globalThis as unknown as { process?: { version?: string; env?: Record<string, string | undefined> } }).process;
     if (proc && typeof proc.version === "string") {
       const env = proc.env ?? {};
-      detected.environment = env.NODE_ENV || "development";
-      detected.release =
-        env.npm_package_version ||
-        env.VERCEL_GIT_COMMIT_SHA ||
-        env.CF_PAGES_COMMIT_SHA ||
-        "";
-      detected.serverName = env.HOSTNAME || env.COMPUTERNAME || "";
+
+      // Vercel-specific detection (must come before generic Node.js defaults)
+      if (env.VERCEL === "1") {
+        detected.environment = env.VERCEL_ENV || "production";
+        detected.release =
+          env.VERCEL_GIT_COMMIT_SHA ||
+          env.npm_package_version ||
+          "";
+        detected.serverName = env.VERCEL_REGION || env.HOSTNAME || "";
+      } else {
+        detected.environment = env.NODE_ENV || "development";
+        detected.release =
+          env.npm_package_version ||
+          env.VERCEL_GIT_COMMIT_SHA ||
+          env.CF_PAGES_COMMIT_SHA ||
+          "";
+        detected.serverName = env.HOSTNAME || env.COMPUTERNAME || "";
+      }
     }
     // Browser
     else if (typeof window !== "undefined") {

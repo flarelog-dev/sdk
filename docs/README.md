@@ -60,6 +60,34 @@ export default withFlareLog(logger, async (req, res) => {
 });
 ```
 
+### Vercel Serverless Functions
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { withVercelServerless } from "@flarelog/sdk/vercel";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+
+export default withVercelServerless(logger, async (req, res) => {
+  req.logger.info("Processing request");
+  res.json({ data: "Hello" });
+});
+```
+
+### Vercel Edge Functions
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { withVercelEdge } from "@flarelog/sdk/vercel";
+
+export const config = { runtime: "edge" };
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+
+export default withVercelEdge(logger, async (request) => {
+  return new Response("Hello from the edge!");
+});
+```
+
 ### React
 
 ```tsx
@@ -83,7 +111,8 @@ trackEvent("button_clicked", { button: "checkout" });
 The `flarelog()` function is a branded factory that creates a `FlareLog` instance with sensible defaults:
 
 - **Auto-detects environment**: `development`, `production`, etc.
-- **Auto-detects release**: from `npm_package_version`, `VERCEL_GIT_COMMIT_SHA`, etc.
+- **Auto-detects release**: from `npm_package_version`, `VERCEL_GIT_COMMIT_SHA`, `CF_PAGES_COMMIT_SHA`, etc.
+- **Auto-detects Vercel environment**: `VERCEL_ENV`, `VERCEL_REGION`
 - **Auto-detects server name**: hostname
 - **Auto-enables capture**: console, globalErrors, rejections
 
@@ -151,6 +180,7 @@ logger.destroy()
 ## Guides
 
 - [Cloudflare Workers Guide](./cloudflare-workers.md) - Workers, Durable Objects, Queues
+- [Vercel Guide](./vercel.md) - Serverless Functions, Edge Functions, Middleware
 - [Browser Guide](./browser-guide.md) - React, Vue, Next.js, Svelte
 - [Node.js Guide](./nodejs-guide.md) - Express, Fastify, NestJS
 - [Advanced Features](./advanced-features.md) - Breadcrumbs, tags, beforeSend

@@ -233,7 +233,38 @@ app.use(expressMiddleware(logger));
 app.use(expressErrorHandler(logger));
 ```
 
-See [framework guides](./docs/) for Next.js, React, and TanStack Start.
+See [framework guides](./docs/) for Next.js, React, TanStack Start, and Vercel.
+
+### Vercel
+
+#### Serverless Functions
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { withVercelServerless } from "@flarelog/sdk/vercel";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+
+export default withVercelServerless(logger, async (req, res) => {
+  req.logger.info("Processing request");
+  res.json({ ok: true });
+});
+```
+
+#### Edge Functions / Middleware
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { withVercelEdge } from "@flarelog/sdk/vercel";
+
+export const config = { runtime: "edge" };
+
+const logger = flarelog({});
+
+export default withVercelEdge(logger, async (request) => {
+  return new Response("Hello from the edge!");
+});
+```
 
 ---
 
