@@ -37,4 +37,10 @@ coverage/
 
 # Docs build output
 _site/
+dist-docs/
+
+# VitePress cache
+cache/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
 
