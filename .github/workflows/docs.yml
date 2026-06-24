@@ -1,0 +1,65 @@
+name: Deploy Docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install marked
+        run: npm install -g marked
+
+      - name: Build docs site
+        run: |
+          mkdir -p _site
+          cp docs/index.html _site/
+          
+          # Convert all markdown files to HTML
+          for f in docs/*.md; do
+            if [ -f "$f" ]; then
+              name=$(basename "$f" .md)
+              echo "Converting $f -> _site/${name}.html"
+              marked -i "$f" -o "_site/${name}.html"
+            fi
+          done
+          
+          ls -la _site/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+        id: deployment

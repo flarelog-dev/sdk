@@ -108,12 +108,14 @@
     "test": "vitest run",
     "lint": "eslint src/ tests/",
     "typecheck": "tsc --noEmit",
+    "docs:build": "npm install -g marked && mkdir -p _site && cp docs/index.html _site/ && for f in docs/*.md; do name=$(basename $f .md); marked -i $f -o _site/${name}.html; done",
+    "docs:serve": "npx serve _site",
     "prepublishOnly": "npm run build && npm run typecheck && npm test"
   },
   "peerDependencies": {
+    "@tanstack/react-start": ">=1.0.0",
     "next": ">=13.0.0",
-    "react": ">=16.8.0",
-    "@tanstack/react-start": ">=1.0.0"
+    "react": ">=16.8.0"
   },
   "peerDependenciesMeta": {
     "next": {
@@ -139,6 +141,5 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "dependencies": {}
+  }
 }

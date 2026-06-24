@@ -34,3 +34,7 @@ coverage/
 
 # Misc
 *.log
+
+# Docs build output
+_site/
+

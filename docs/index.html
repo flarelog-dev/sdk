@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlareLog SDK Documentation</title>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        header {
+            text-align: center;
+            padding: 4rem 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 3rem;
+        }
+        h1 { font-size: 3rem; margin-bottom: 1rem; background: linear-gradient(135deg, var(--primary), #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { font-size: 1.25rem; color: var(--text-muted); max-width: 600px; margin: 0 auto; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: transform 0.2s, border-color 0.2s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+        }
+        .card h3 { color: var(--primary); margin-bottom: 0.5rem; font-size: 1.25rem; }
+        .card p { color: var(--text-muted); font-size: 0.95rem; }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+        .badge-framework { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .badge-platform { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+        .badge-guide { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .quick-start {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(168, 85, 247, 0.1));
+            border: 1px solid var(--primary);
+        }
+        footer {
+            text-align: center;
+            padding: 3rem 0;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+            margin-top: 3rem;
+        }
+        .github-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary);
+            text-decoration: none;
+            margin-top: 1rem;
+        }
+        .github-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>FlareLog SDK</h1>
+            <p class="subtitle">Zero-dependency observability for any JavaScript runtime. Ships logs, errors, and W3C traces to FlareLog or any OTLP backend.</p>
+        </header>
+
+        <div class="grid">
+            <a href="./README.html" class="card quick-start">
+                <span class="badge badge-guide">START HERE</span>
+                <h3>Quick Start</h3>
+                <p>Installation, integration picker, and quick examples for every stack.</p>
+            </a>
+
+            <a href="./cloudflare-workers.html" class="card">
+                <span class="badge badge-platform">PLATFORM</span>
+                <h3>Cloudflare Workers</h3>
+                <p>Workers, Durable Objects, Queues, and Cron triggers with full OTel spans.</p>
+            </a>
+
+            <a href="./vercel.html" class="card">
+                <span class="badge badge-platform">PLATFORM</span>
+                <h3>Vercel</h3>
+                <p>Serverless Functions, Edge Functions, and Middleware.</p>
+            </a>
+
+            <a href="./next.html" class="card">
+                <span class="badge badge-framework">FRAMEWORK</span>
+                <h3>Next.js</h3>
+                <p>API routes, App Router, and Pages Router integration.</p>
+            </a>
+
+            <a href="./browser-guide.html" class="card">
+                <span class="badge badge-guide">GUIDE</span>
+                <h3>Browser Guide</h3>
+                <p>React, Vue, vanilla JS, and error boundary setup.</p>
+            </a>
+
+            <a href="./nodejs-guide.html" class="card">
+                <span class="badge badge-guide">GUIDE</span>
+                <h3>Node.js Guide</h3>
+                <p>Express, Fastify, NestJS, and custom Node.js servers.</p>
+            </a>
+
+            <a href="./tanstack-start.html" class="card">
+                <span class="badge badge-framework">FRAMEWORK</span>
+                <h3>TanStack Start</h3>
+                <p>Server functions and client wrappers for TanStack Start.</p>
+            </a>
+
+            <a href="./advanced-features.html" class="card">
+                <span class="badge badge-guide">GUIDE</span>
+                <h3>Advanced Features</h3>
+                <p>Breadcrumbs, tags, beforeSend hooks, custom spans, and fan-out.</p>
+            </a>
+        </div>
+
+        <footer>
+            <p>FlareLog SDK v2.3.1 — MIT License</p>
+            <a href="https://github.com/flarelog-dev/sdk" class="github-link" target="_blank" rel="noopener">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                View on GitHub
+            </a>
+        </footer>
+    </div>
+</body>
+</html>
