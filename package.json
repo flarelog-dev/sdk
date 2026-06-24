@@ -108,8 +108,10 @@
     "test": "vitest run",
     "lint": "eslint src/ tests/",
     "typecheck": "tsc --noEmit",
-    "docs:build": "npm install -g marked && mkdir -p _site && cp docs/index.html _site/ && for f in docs/*.md; do name=$(basename $f .md); marked -i $f -o _site/${name}.html; done",
-    "docs:serve": "npx serve _site",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:serve": "vitepress preview docs --port 5000",
     "prepublishOnly": "npm run build && npm run typecheck && npm test"
   },
   "peerDependencies": {
@@ -134,6 +136,7 @@
     "react": "^18.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.9"
   },
   "overrides": {

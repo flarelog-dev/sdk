@@ -196,7 +196,7 @@ export function ErrorBoundaryWrapper({ children }: { children: React.ReactNode }
 }
 ```
 
-See [Browser Guide](./browser-guide.md) for `useFlareLog`, `useFlareLogPageView`, and global error capture.
+See [Browser Guide](/guides/browser-guide) for `useFlareLog`, `useFlareLogPageView`, and global error capture.
 
 ## TypeScript
 

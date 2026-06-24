@@ -1,0 +1,141 @@
+@import 'vitepress/dist/client/theme-default/styles/vars.css';
+
+:root {
+  --vp-c-brand-1: #60a5fa;
+  --vp-c-brand-2: #3b82f6;
+  --vp-c-brand-3: #2563eb;
+  --vp-c-brand-soft: rgba(59, 130, 246, 0.14);
+
+  --vp-c-bg: #0f172a;
+  --vp-c-bg-alt: #1e293b;
+  --vp-c-bg-elv: #1e293b;
+  --vp-c-bg-soft: #334155;
+
+  --vp-c-text-1: #e2e8f0;
+  --vp-c-text-2: #94a3b8;
+  --vp-c-text-3: #64748b;
+
+  --vp-c-border: #334155;
+  --vp-c-divider: #334155;
+  --vp-c-gutter: #1e293b;
+
+  --vp-c-accent: #a855f7;
+  --vp-c-accent-bg: #a855f7;
+  --vp-c-accent-hover: #9333ea;
+  --vp-c-accent-soft: rgba(168, 85, 247, 0.14);
+
+  --vp-code-bg: #1e293b;
+  --vp-code-color: #e2e8f0;
+  --vp-code-block-bg: #0f172a;
+  --vp-code-block-color: #e2e8f0;
+  --vp-code-block-divider-color: #334155;
+
+  --vp-custom-block-tip-bg: rgba(59, 130, 246, 0.1);
+  --vp-custom-block-tip-border: #3b82f6;
+  --vp-custom-block-tip-text: #60a5fa;
+  --vp-custom-block-warning-bg: rgba(251, 191, 36, 0.1);
+  --vp-custom-block-warning-border: #fbbf24;
+  --vp-custom-block-warning-text: #fbbf24;
+  --vp-custom-block-danger-bg: rgba(248, 113, 113, 0.1);
+  --vp-custom-block-danger-border: #f87171;
+  --vp-custom-block-danger-text: #f87171;
+}
+
+.dark {
+  --vp-c-bg: #0f172a;
+  --vp-c-bg-alt: #1e293b;
+  --vp-c-bg-elv: #1e293b;
+  --vp-c-bg-soft: #334155;
+}
+
+.VPHero .name,
+.VPHero .text {
+  background: linear-gradient(135deg, #60a5fa, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.VPFeature {
+  background: var(--vp-c-bg-alt);
+  border: 1px solid var(--vp-c-border);
+  border-radius: 12px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.VPFeature:hover {
+  transform: translateY(-4px);
+  border-color: var(--vp-c-brand-2);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vp-c-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vp-c-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-text-3);
+}
+
+.VPBadge {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #60a5fa !important;
+}
+
+.vp-doc div[class*='language-'] {
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-border);
+}
+
+.vp-doc table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.vp-doc th {
+  background: var(--vp-c-bg-alt);
+  border: 1px solid var(--vp-c-border);
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.vp-doc td {
+  border: 1px solid var(--vp-c-border);
+  padding: 0.75rem;
+}
+
+.vp-doc tr:nth-child(even) {
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.vp-doc a {
+  color: var(--vp-c-brand-1);
+  text-decoration: none;
+}
+
+.vp-doc a:hover {
+  text-decoration: underline;
+}
+
+.VPNav {
+  background: rgba(15, 23, 42, 0.9) !important;
+  backdrop-filter: blur(8px);
+}
+
+.VPSidebar {
+  background: var(--vp-c-bg) !important;
+}
+
+.VPLocalSearchBox {
+  background: var(--vp-c-bg-alt) !important;
+}
