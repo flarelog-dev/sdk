@@ -140,7 +140,8 @@
     "vitest": "^4.1.9"
   },
   "overrides": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "vite": "^6.4.2"
   },
   "engines": {
     "node": ">=18"
