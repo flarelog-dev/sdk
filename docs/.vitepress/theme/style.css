@@ -1,141 +1,343 @@
 @import 'vitepress/dist/client/theme-default/styles/vars.css';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --vp-c-brand-1: #60a5fa;
-  --vp-c-brand-2: #3b82f6;
-  --vp-c-brand-3: #2563eb;
-  --vp-c-brand-soft: rgba(59, 130, 246, 0.14);
+  /* Brand Colors - Orange */
+  --vp-c-brand-1: #fb923c;
+  --vp-c-brand-2: #f97316;
+  --vp-c-brand-3: #ea580c;
+  --vp-c-brand-soft: rgba(249, 115, 22, 0.14);
 
-  --vp-c-bg: #0f172a;
-  --vp-c-bg-alt: #1e293b;
-  --vp-c-bg-elv: #1e293b;
-  --vp-c-bg-soft: #334155;
+  /* Background Colors */
+  --vp-c-bg: #09090b;
+  --vp-c-bg-alt: #18181b;
+  --vp-c-bg-elv: #18181b;
+  --vp-c-bg-soft: #27272a;
 
-  --vp-c-text-1: #e2e8f0;
-  --vp-c-text-2: #94a3b8;
-  --vp-c-text-3: #64748b;
+  /* Text Colors */
+  --vp-c-text-1: #ffffff;
+  --vp-c-text-2: #d4d4d8;
+  --vp-c-text-3: #a1a1aa;
 
-  --vp-c-border: #334155;
-  --vp-c-divider: #334155;
-  --vp-c-gutter: #1e293b;
+  /* Border Colors */
+  --vp-c-border: #27272a;
+  --vp-c-divider: #27272a;
+  --vp-c-gutter: #18181b;
 
-  --vp-c-accent: #a855f7;
-  --vp-c-accent-bg: #a855f7;
-  --vp-c-accent-hover: #9333ea;
-  --vp-c-accent-soft: rgba(168, 85, 247, 0.14);
+  /* Accent Colors */
+  --vp-c-accent: #f97316;
+  --vp-c-accent-bg: #f97316;
+  --vp-c-accent-hover: #ea580c;
+  --vp-c-accent-soft: rgba(249, 115, 22, 0.14);
 
-  --vp-code-bg: #1e293b;
-  --vp-code-color: #e2e8f0;
-  --vp-code-block-bg: #0f172a;
-  --vp-code-block-color: #e2e8f0;
-  --vp-code-block-divider-color: #334155;
+  /* Code Colors */
+  --vp-code-bg: #18181b;
+  --vp-code-color: #d4d4d8;
+  --vp-code-block-bg: #09090b;
+  --vp-code-block-color: #d4d4d8;
+  --vp-code-block-divider-color: #27272a;
 
-  --vp-custom-block-tip-bg: rgba(59, 130, 246, 0.1);
-  --vp-custom-block-tip-border: #3b82f6;
-  --vp-custom-block-tip-text: #60a5fa;
+  /* Custom Block Colors */
+  --vp-custom-block-tip-bg: rgba(249, 115, 22, 0.1);
+  --vp-custom-block-tip-border: #f97316;
+  --vp-custom-block-tip-text: #fb923c;
   --vp-custom-block-warning-bg: rgba(251, 191, 36, 0.1);
   --vp-custom-block-warning-border: #fbbf24;
   --vp-custom-block-warning-text: #fbbf24;
   --vp-custom-block-danger-bg: rgba(248, 113, 113, 0.1);
   --vp-custom-block-danger-border: #f87171;
   --vp-custom-block-danger-text: #f87171;
+  --vp-custom-block-info-bg: rgba(52, 211, 153, 0.1);
+  --vp-custom-block-info-border: #34d399;
+  --vp-custom-block-info-text: #34d399;
+
+  /* Font Family */
+  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', monospace;
 }
 
 .dark {
-  --vp-c-bg: #0f172a;
-  --vp-c-bg-alt: #1e293b;
-  --vp-c-bg-elv: #1e293b;
-  --vp-c-bg-soft: #334155;
+  --vp-c-bg: #09090b;
+  --vp-c-bg-alt: #18181b;
+  --vp-c-bg-elv: #18181b;
+  --vp-c-bg-soft: #27272a;
+}
+
+/* Selection Color */
+::selection {
+  background: #f97316;
+  color: #000000;
+}
+
+/* Hero Section */
+.VPHero {
+  background: linear-gradient(180deg, #09090b 0%, #18181b 100%);
 }
 
 .VPHero .name,
 .VPHero .text {
-  background: linear-gradient(135deg, #60a5fa, #a855f7);
+  background: linear-gradient(135deg, #ffb84d, #f48120, #d96516);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
 }
 
+.VPHero .tagline {
+  color: #a1a1aa;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Feature Cards - Brutalist Style */
 .VPFeature {
-  background: var(--vp-c-bg-alt);
-  border: 1px solid var(--vp-c-border);
-  border-radius: 12px;
-  transition: transform 0.2s, border-color 0.2s;
+  background: #18181b;
+  border: 2px solid #27272a;
+  border-radius: 0;
+  transition: all 0.2s ease;
+  box-shadow: 4px 4px 0px 0px #27272a;
 }
 
 .VPFeature:hover {
-  transform: translateY(-4px);
-  border-color: var(--vp-c-brand-2);
+  transform: translate(-2px, -2px);
+  border-color: #f97316;
+  box-shadow: 6px 6px 0px 0px #f97316;
 }
 
+.VPFeature .title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+}
+
+.VPFeature .details {
+  color: #a1a1aa;
+}
+
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--vp-c-bg);
+  background: #09090b;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--vp-c-border);
-  border-radius: 4px;
+  background: #27272a;
+  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--vp-c-text-3);
+  background: #52525b;
 }
 
+/* Badges */
 .VPBadge {
-  background: rgba(59, 130, 246, 0.2) !important;
-  color: #60a5fa !important;
+  background: rgba(249, 115, 22, 0.2) !important;
+  color: #fb923c !important;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 0;
 }
 
+/* Code Blocks */
 .vp-doc div[class*='language-'] {
-  border-radius: 8px;
-  border: 1px solid var(--vp-c-border);
+  border-radius: 0;
+  border: 2px solid #27272a;
+  background: #09090b;
 }
 
+.vp-doc div[class*='language-'] code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Tables */
 .vp-doc table {
   border-collapse: collapse;
   width: 100%;
   margin: 1rem 0;
+  border: 2px solid #27272a;
 }
 
 .vp-doc th {
-  background: var(--vp-c-bg-alt);
-  border: 1px solid var(--vp-c-border);
+  background: #18181b;
+  border: 2px solid #27272a;
   padding: 0.75rem;
   text-align: left;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ffffff;
 }
 
 .vp-doc td {
-  border: 1px solid var(--vp-c-border);
+  border: 2px solid #27272a;
   padding: 0.75rem;
+  color: #d4d4d8;
 }
 
 .vp-doc tr:nth-child(even) {
-  background: rgba(30, 41, 59, 0.5);
+  background: rgba(39, 39, 42, 0.3);
 }
 
+/* Links */
 .vp-doc a {
-  color: var(--vp-c-brand-1);
+  color: #fb923c;
   text-decoration: none;
+  font-weight: 500;
 }
 
 .vp-doc a:hover {
   text-decoration: underline;
+  color: #f97316;
 }
 
+/* Navigation */
 .VPNav {
-  background: rgba(15, 23, 42, 0.9) !important;
-  backdrop-filter: blur(8px);
+  background: rgba(9, 9, 11, 0.95) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 2px solid #27272a;
 }
 
+.VPNavBar .title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Sidebar */
 .VPSidebar {
-  background: var(--vp-c-bg) !important;
+  background: #09090b !important;
+  border-right: 2px solid #27272a;
 }
 
+.VPSidebar .text {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+}
+
+.VPSidebar .link {
+  color: #a1a1aa;
+}
+
+.VPSidebar .link:hover {
+  color: #fb923c;
+}
+
+.VPSidebar .link.active {
+  color: #f97316;
+}
+
+/* Search */
 .VPLocalSearchBox {
-  background: var(--vp-c-bg-alt) !important;
+  background: #18181b !important;
+  border: 2px solid #27272a;
+}
+
+/* Buttons */
+.VPButton {
+  border-radius: 0 !important;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.VPButton.brand {
+  background: #f97316 !important;
+  border: 2px solid #f97316 !important;
+  box-shadow: 4px 4px 0px 0px #ea580c;
+}
+
+.VPButton.brand:hover {
+  background: #fb923c !important;
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px 0px #ea580c;
+}
+
+.VPButton.alt {
+  background: transparent !important;
+  border: 2px solid #27272a !important;
+  color: #d4d4d8 !important;
+}
+
+.VPButton.alt:hover {
+  border-color: #f97316 !important;
+  color: #fb923c !important;
+}
+
+/* Footer */
+.VPFooter {
+  background: #09090b;
+  border-top: 2px solid #27272a;
+}
+
+/* Outline (Right Sidebar) */
+.VPDocOutlineItem {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+}
+
+/* Content Typography */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+.vp-doc h1 {
+  border-bottom: 2px solid #27272a;
+  padding-bottom: 0.5rem;
+}
+
+.vp-doc h2 {
+  border-bottom: 1px solid #27272a;
+  padding-bottom: 0.3rem;
+}
+
+/* Custom Block Styling */
+.vp-doc .custom-block {
+  border-radius: 0;
+  border: 2px solid;
+}
+
+.vp-doc .custom-block.tip {
+  background: rgba(249, 115, 22, 0.05);
+  border-color: #f97316;
+}
+
+.vp-doc .custom-block.warning {
+  background: rgba(251, 191, 36, 0.05);
+  border-color: #fbbf24;
+}
+
+.vp-doc .custom-block.danger {
+  background: rgba(248, 113, 113, 0.05);
+  border-color: #f87171;
+}
+
+/* Mobile Menu */
+.VPNavScreen {
+  background: #09090b;
+}
+
+.VPNavScreen .container {
+  border: 2px solid #27272a;
 }
