@@ -1,7 +1,7 @@
 {
   "name": "@flarelog/sdk",
   "version": "2.1.0",
-  "description": "Zero-config logging SDK for Cloudflare Workers and Node.js. Send logs to FlareLog with minimal setup.",
+  "description": "Zero-dependency observability SDK. Ships logs, errors, and W3C traces from Cloudflare Workers, Vercel, Node.js, or the browser to FlareLog or any OTLP backend.",
   "keywords": [
     "logging",
     "cloudflare-workers",
