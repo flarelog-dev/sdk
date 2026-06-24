@@ -179,17 +179,17 @@ export interface AutoCaptureConfig {
   globalErrors?: boolean;
   /** Capture unhandled promise rejections */
   rejections?: boolean;
-  /** Enable worker fetch handler wrapper helpers */
+  /** Enable worker fetch handler wrapper helpers. Not currently used. */
   fetchHandler?: boolean;
-  /** Enable Web Worker wrapper helpers */
+  /** Enable Web Worker wrapper helpers. Not currently used. */
   worker?: boolean;
   /** Deduplication window in milliseconds. Defaults to 5000 */
   dedupWindowMs?: number;
-  /** Capture navigation breadcrumbs */
+  /** Capture navigation breadcrumbs. Not yet implemented. */
   navigation?: boolean;
-  /** Capture fetch/XHR breadcrumbs and performance data */
+  /** Capture fetch/XHR breadcrumbs and performance data. Not yet implemented. */
   http?: boolean;
-  /** Capture DOM click breadcrumbs */
+  /** Capture DOM click breadcrumbs. Not yet implemented. */
   clicks?: boolean;
 }
 

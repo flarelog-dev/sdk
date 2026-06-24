@@ -24,9 +24,7 @@ The `flarelog()` factory auto-detects environment and enables console/globalErro
       console: true,
       globalErrors: true,
       rejections: true,
-      http: true,        // Capture fetch/XHR as breadcrumbs
-      navigation: true, // Capture page navigation
-      clicks: true,      // Capture user clicks
+      // Note: http, navigation, and clicks capture is not yet implemented
     },
   });
   
@@ -54,9 +52,7 @@ export const logger = flarelog({
     console: true,
     globalErrors: true,
     rejections: true,
-    http: true,
-    navigation: true,
-    clicks: true,
+    // Note: http, navigation, and clicks capture is not yet implemented
   },
   beforeSend: (log) => {
     if (log.metadata?.password) delete log.metadata.password;
@@ -92,6 +88,7 @@ function MyComponent() {
 }
 ```
 
+```typescript
 // hooks/useUserTracking.ts
 import { useEffect } from "react";
 import { logger } from "../flarelog";
@@ -122,6 +119,24 @@ function App() {
       {/* Your app */}
     </div>
   );
+}
+```
+
+```typescript
+// hooks/usePageView.ts
+import { useFlareLogPageView } from "@flarelog/sdk/react";
+import { logger } from "../flarelog";
+
+export function usePageView(pageName?: string) {
+  useFlareLogPageView(logger, pageName);
+}
+
+// HomePage.tsx
+import { usePageView } from "../hooks/usePageView";
+
+export function HomePage() {
+  usePageView("Home");
+  return <div>Home</div>;
 }
 ```
 
@@ -205,8 +220,7 @@ const logger = new FlareLog({
     console: true,
     globalErrors: true,
     rejections: true,
-    http: true,
-    navigation: true,
+    // Note: http, navigation, and clicks capture is not yet implemented
   },
 });
 
@@ -273,8 +287,7 @@ export const clientLogger = new FlareLog({
     console: true,
     globalErrors: true,
     rejections: true,
-    http: true,
-    navigation: true,
+    // Note: http, navigation, and clicks capture is not yet implemented
   },
   beforeSend: (log) => {
     // Scrub sensitive data
@@ -302,6 +315,8 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 }
 
 // app/layout.tsx (App Router application shell)
+"use client";
+
 import { FlareLogErrorBoundary } from "@flarelog/sdk/react";
 import { clientLogger } from "../lib/flarelog-client";
 
@@ -556,7 +571,8 @@ const logger = new FlareLog({
 8. **Flush on unload**: Ensure logs are sent before page closes
 
 ```typescript
-// Ensure logs are sent before page unload
+// Best-effort flush before page unload
+// flush() returns a Promise; browsers may terminate before it resolves.
 window.addEventListener("beforeunload", () => {
   logger.flush();
 });

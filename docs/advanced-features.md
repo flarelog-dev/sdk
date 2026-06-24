@@ -135,18 +135,20 @@ import { FlareLog } from "@flarelog/sdk";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
-  // Uses default scrub list: password, token, email, name, ssn, etc.
+  // Adds to the default scrub list: password, secret, token, apiKey, authorization, cookie, session, creditCard, ssn
   scrubFields: ["password", "secret", "token", "email"],
 });
 
 logger.info("User signed up", {
-  email: "user@example.com",  // → "[REDACTED]"
-  name: "John",               // → "[REDACTED]"
-  userId: "123",              // → "123" (kept)
+  email: "user@example.com",  // → kept unless added to scrubFields
+  token: "abc123",              // → "[REDACTED]" (default)
+  userId: "123",                // → "123" (kept)
 });
 ```
 
-**Default scrub fields:** `password`, `secret`, `token`, `apiKey`, `authorization`, `email`, `phone`, `name`, `ssn`, `credit_card`, etc.
+**Default scrub fields:** `password`, `secret`, `token`, `apiKey`, `authorization`, `auth`, `cookie`, `session`, `creditCard`, `ssn`.
+
+To scrub additional PII such as `email`, `phone`, or `name`, add them to `scrubFields`.
 
 ## Handling Dropped Logs
 
@@ -376,10 +378,12 @@ const logger = new FlareLog({
   apiKey: "fl_your_api_key",
   
   // Optional
-  endpoint: "https://flarelog.dev/api",
+  endpoint: "https://flarelog.dev",
   level: "DEBUG",
+  // Note: batchSize is accepted but not currently wired into the processors
   batchSize: 10,
   flushIntervalMs: 5000,
+  // workerMode: true, // Use SimpleProcessor; recommended for Workers/edge runtimes
   debug: false,
   defaultSource: "",
   includeTimestamps: true,
@@ -392,14 +396,15 @@ const logger = new FlareLog({
   // Sampling
   sampleRate: 1.0,
   
-  // Auto-capture
+  // Auto-capture (console, globalErrors, rejections are implemented;
+  // http, navigation, and clicks are accepted but not yet implemented)
   autoCapture: {
     console: { levels: ["error", "warn"], source: "console" },
     globalErrors: true,
     rejections: true,
-    http: true,
-    navigation: true,
-    clicks: true,
+    // http: true,
+    // navigation: true,
+    // clicks: true,
     dedupWindowMs: 5000,
   },
   

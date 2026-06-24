@@ -38,7 +38,7 @@ interface VercelResponse {
  * Handler signature for Vercel Serverless Functions (Node.js runtime).
  */
 export type VercelServerlessHandler = (
-  req: VercelRequest,
+  req: VercelRequest & { logger: FlareLogLike; traceId: string },
   res: VercelResponse
 ) => void | Promise<void>;
 
@@ -122,9 +122,11 @@ export function withVercelServerless(
       });
     });
 
+    const typedReq = req as VercelRequest & { logger: FlareLogLike; traceId: string };
+
     // Wrap the handler to capture errors
     return Promise.resolve()
-      .then(() => handler(req, res))
+      .then(() => handler(typedReq, res))
       .catch((err) => {
         const duration = Date.now() - start;
         child.logError(err, {
@@ -137,7 +139,8 @@ export function withVercelServerless(
           res.json({ error: "Internal Server Error" });
         }
         throw err;
-      });
+      })
+      .finally(() => logger.flush());
   };
 }
 

@@ -54,11 +54,11 @@ function extractTraceId(
     );
   }
 
-  const raw = headers["x-trace-id"];
-  const tp = headers["traceparent"];
-  const traceId = Array.isArray(raw) ? raw[0] : raw;
-  const traceparent = Array.isArray(tp) ? tp[0] : tp;
-  return traceId || traceparent?.split("-")[1] || crypto.randomUUID();
+  const rawTraceId = headers["x-trace-id"];
+  const rawTraceparent = headers["traceparent"];
+  const traceId = Array.isArray(rawTraceId) ? rawTraceId[0] : rawTraceId;
+  const traceparent = Array.isArray(rawTraceparent) ? rawTraceparent[0] : rawTraceparent;
+  return traceparent?.split("-")[1] || traceId || crypto.randomUUID();
 }
 
 function logLevelForStatus(status: number | undefined): "ERROR" | "WARN" | "INFO" {

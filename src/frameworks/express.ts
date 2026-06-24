@@ -1,4 +1,5 @@
 import type { FlareLog, FlareLogChild } from "../client";
+import { randomUUID } from "node:crypto";
 
 // Inline types to avoid Express dependency
 interface Request {
@@ -37,7 +38,7 @@ interface NextFunction {
  */
 export function expressMiddleware(logger: FlareLog) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const traceId = (req.headers["x-trace-id"] as string) || crypto.randomUUID();
+    const traceId = (req.headers["x-trace-id"] as string) || randomUUID();
     req.traceId = traceId;
 
     const child = logger.child({

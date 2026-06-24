@@ -167,17 +167,27 @@ context.logger.child({ source: "order-service", operation: "create-order" });
 
 ## Custom Trace ID Header
 
-The middleware reads `x-trace-id`. To use a different header, wrap with a
-small custom middleware that sets it on the request before delegating:
+The middleware reads `x-trace-id`. To use a different header, wrap it with a
+small custom middleware that rewrites the request first:
 
 ```typescript
 import { createMiddleware } from "@tanstack/react-start";
+import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 
 const renameTraceHeader = createMiddleware().server(async ({ next, request }) => {
-  // TanStack Start's request is a Web Request; mutate via headers construction
-  // if needed, or simply read the alt header in a custom logger middleware.
+  const altTraceId = request.headers.get("x-request-id");
+  if (altTraceId) {
+    const headers = new Headers(request.headers);
+    headers.set("x-trace-id", altTraceId);
+    return next({ request: new Request(request, { headers }) });
+  }
   return next();
 });
+
+// Apply both middlewares in order
+export const startInstance = createStart(() => ({
+  requestMiddleware: [renameTraceHeader, tanstackStartMiddleware(logger)],
+}));
 ```
 
 ## Adding User Context
@@ -201,6 +211,9 @@ export const Route = createFileRoute("/api/protected")({
 FLARELOG_API_KEY=fl_your_api_key
 FLARELOG_ENVIRONMENT=production
 FLARELOG_RELEASE=1.2.3
+FLARELOG_SERVER_NAME=tanstack-start
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-0.grafana.net
+OTEL_RESOURCE_ATTRIBUTES=service.name=my-app
 ```
 
 ```typescript

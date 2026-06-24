@@ -59,6 +59,7 @@ app.listen(3000, () => {
 ```typescript
 import fastify from "fastify";
 import { FlareLog } from "@flarelog/sdk";
+import { randomUUID } from "node:crypto";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
@@ -121,6 +122,42 @@ app.listen({ port: 3000 }, (err) => {
 });
 ```
 
+### Hono
+
+```typescript
+import { Hono } from "hono";
+import { flarelog } from "@flarelog/sdk";
+import { honoMiddleware } from "@flarelog/sdk/hono";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+
+const app = new Hono();
+
+app.use(honoMiddleware(logger));
+
+app.get("/api/users/:id", async (c) => {
+  const log = c.get("logger");
+  const userId = c.req.param("id");
+
+  log.info("Fetching user", { userId });
+
+  try {
+    const user = await db.users.findById(userId);
+    if (!user) {
+      log.warn("User not found", { userId });
+      return c.json({ error: "Not found" }, 404);
+    }
+    log.info("User fetched", { userId });
+    return c.json(user);
+  } catch (err) {
+    log.logError(err, { message: "Failed to fetch user", metadata: { userId } });
+    return c.json({ error: "Internal error" }, 500);
+  }
+});
+
+export default app;
+```
+
 ### NestJS
 
 ```typescript
@@ -169,7 +206,7 @@ export class FlareLogInterceptor implements NestInterceptor {
   
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
-    const traceId = request.headers["x-trace-id"] || crypto.randomUUID();
+  const traceId = request.headers["x-trace-id"] || randomUUID();
     
     const logger = this.flarelogService.createChild({
       source: "nestjs",
@@ -409,11 +446,12 @@ cleanupJob.start();
 #!/usr/bin/env node
 import { FlareLog } from "@flarelog/sdk";
 import { Command } from "commander";
+import os from "node:os";
 
 const logger = new FlareLog({
   apiKey: "fl_your_api_key",
   environment: "cli",
-  serverName: require("os").hostname(),
+  serverName: os.hostname(),
 });
 
 const program = new Command();
@@ -559,6 +597,24 @@ const testLogger = new FlareLog({
 
 ## Environment Variables
 
+The SDK reads the following environment variables when you use the `flarelog()`
+factory or omit the equivalent config option:
+
+| Variable | Config option | Description |
+| -------- | ------------- | ----------- |
+| `FLARELOG_API_KEY` | `apiKey` | Flarelog hosted-backend API key |
+| `FLARELOG_ENDPOINT` | `endpoint` | Flarelog endpoint (default `https://flarelog.dev`) |
+| `FLARELOG_ENVIRONMENT` | `environment` | Deployment environment name |
+| `FLARELOG_RELEASE` | `release` | Release version or git SHA |
+| `FLARELOG_SERVER_NAME` | `serverName` | Host or instance name |
+| `OTEL_SERVICE_NAME` | `serviceName` | OpenTelemetry service name |
+| `OTEL_RESOURCE_ATTRIBUTES` | `resourceAttributes` | Extra OTel resource attributes (`key=value,key2=value2`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `otlpEndpoint` | OTLP/HTTP base endpoint for fan-out |
+| `OTEL_EXPORTER_OTLP_HEADERS` | `otlpHeaders` | OTLP headers (`Key=Value,Key2=Value2`) |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | — | Override OTLP logs endpoint |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | — | Override OTLP traces endpoint |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | — | OTLP protocol (`http/protobuf` or `http/json`) |
+
 ```bash
 # .env
 FLARELOG_API_KEY=fl_your_api_key
@@ -569,12 +625,13 @@ FLARELOG_RELEASE=1.2.3
 ```typescript
 // config.ts
 import { FlareLog } from "@flarelog/sdk";
+import os from "node:os";
 
 export const logger = new FlareLog({
   apiKey: process.env.FLARELOG_API_KEY!,
   environment: process.env.FLARELOG_ENVIRONMENT,
   release: process.env.FLARELOG_RELEASE,
-  serverName: require("os").hostname(),
+  serverName: os.hostname(),
 });
 ```
 

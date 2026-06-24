@@ -272,18 +272,25 @@ export const config = {
 
 ## Environment Detection
 
-The SDK automatically detects Vercel-specific environment variables when running on the platform. The `flarelog()` factory uses these to set sensible defaults:
+The SDK automatically detects the variables below and applies them as defaults
+when you use the `flarelog()` factory:
 
-| Variable                | Used For                                 | Example                    |
-| ----------------------- | ---------------------------------------- | -------------------------- |
-| `VERCEL`                | Runtime detection (`"vercel"`)           | `"1"`                      |
-| `VERCEL_ENV`            | `environment` config default             | `"production"`             |
-| `VERCEL_REGION`         | `serverName` config default              | `"iad1"`                   |
-| `VERCEL_URL`            | Deployment URL in log metadata           | `"my-app-abc123.vercel.app"` |
-| `VERCEL_GIT_COMMIT_SHA` | `release` config default                 | `"abc123def456"`           |
-| `VERCEL_GIT_COMMIT_REF` | Git branch in metadata                   | `"main"`                   |
-| `VERCEL_PROJECT_ID`     | Project identifier in metadata           | `"prj_xxxxx"`              |
-| `VERCEL_DEPLOYMENT_ID`  | Deployment identifier in metadata        | `"dpl_xxxxx"`              |
+| Variable                | Maps to          | Example                    |
+| ----------------------- | ---------------- | -------------------------- |
+| `VERCEL`                | Runtime detection| `"1"`                      |
+| `VERCEL_ENV`            | `environment`    | `"production"`             |
+| `VERCEL_REGION`         | `serverName`     | `"iad1"`                   |
+| `VERCEL_GIT_COMMIT_SHA` | `release`        | `"abc123def456"`           |
+
+Additional deployment context (URL, branch, project ID, deployment ID) is
+available through the `detectVercelEnv()` helper:
+
+| Variable                | Available via `detectVercelEnv()` | Example                    |
+| ----------------------- | --------------------------------- | -------------------------- |
+| `VERCEL_URL`            | `.url`                            | `"my-app-abc123.vercel.app"` |
+| `VERCEL_GIT_COMMIT_REF` | `.commitRef`                      | `"main"`                   |
+| `VERCEL_PROJECT_ID`     | `.projectId`                      | `"prj_xxxxx"`              |
+| `VERCEL_DEPLOYMENT_ID`  | `.deploymentId`                   | `"dpl_xxxxx"`              |
 
 ### Manual Environment Detection
 
@@ -330,7 +337,7 @@ In your Vercel project dashboard, add the following environment variables:
 FLARELOG_API_KEY=fl_your_api_key_here
 ```
 
-Optionally, to fan out to an OTel backend:
+Optionally, to fan out to an OTel backend, set the endpoint and headers. The standard `OTEL_EXPORTER_OTLP_HEADERS` format (`Key=Value`) is parsed automatically when you use `flarelog()`:
 
 ```
 OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-0.grafana.net
@@ -364,7 +371,8 @@ const logger = flarelog({
     {
       type: "otlp",
       endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
-      headers: { Authorization: `Basic ${process.env.OTEL_EXPORTER_OTLP_HEADERS}` },
+      // Or pass headers explicitly if not using OTEL_EXPORTER_OTLP_HEADERS:
+      // headers: { Authorization: `Basic ${process.env.OTEL_AUTH_TOKEN}` },
     },
   ],
 });
@@ -377,13 +385,15 @@ const logger = flarelog({
 | Runtime                  | Node.js                             | V8 (Edge)                     |
 | Handler signature        | `(req, res)`                        | `(request) => Response`       |
 | OTel span instrumentation| Child logger only                   | Full `withRequest` spans      |
-| W3C trace propagation    | Extract only                        | Extract + inject              |
+| W3C trace propagation    | Extract only                        | Extract only                  |
 | `req.logger` available   | Yes                                 | No (use closure `logger`)     |
 | `req.traceId` available  | Yes                                 | No (use `logger.child()`)     |
 | Node.js APIs             | Full access                         | Limited (Web APIs only)       |
 | Cold start               | Slower (~250ms)                     | Faster (~50ms)                |
 | Max duration             | 60s (Pro: 300s)                     | 30s                           |
 | Bundle size              | No constraint                       | Must be small                 |
+
+Use `logger.injectTraceContext(headers)` in either runtime to propagate trace context to outgoing requests.
 
 **When to use Serverless**: You need full Node.js APIs (file system, native modules, database drivers), longer execution times, or the traditional `(req, res)` pattern.
 
@@ -466,10 +476,6 @@ export default withVercelEdge(logger, async (request) => {
 
 ## Troubleshooting
 
-### "SDK must be used in backend" error
-
-This occurs when `@flarelog/sdk` is accidentally imported in client-side code. Ensure you only import it in API routes (`api/`), middleware (`middleware.ts`), or server-side utilities.
-
 ### Logs not appearing in dashboard
 
 1. Verify `FLARELOG_API_KEY` is set in your Vercel project environment variables
@@ -479,7 +485,7 @@ This occurs when `@flarelog/sdk` is accidentally imported in client-side code. E
 
 ### Edge Function bundle size
 
-The SDK is designed to be lightweight (~9.5 kB gzipped) and has zero dependencies, making it suitable for Edge Functions where bundle size matters. If you only need the edge wrapper, import from the sub-path:
+The SDK has zero dependencies and is designed to be lightweight, making it suitable for Edge Functions where bundle size matters. If you only need the edge wrapper, import from the sub-path:
 
 ```typescript
 // Only pulls in the Vercel edge wrapper, not the full SDK

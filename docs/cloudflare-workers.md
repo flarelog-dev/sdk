@@ -5,13 +5,14 @@
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
-
 export default {
-  fetch: workerFetch(logger, async (request, env, ctx) => {
-    logger.info("Hello from worker!");
-    return new Response("Hello");
-  }),
+  fetch: (request, env, ctx) => {
+    const logger = flarelog({ apiKey: env.FLARELOG_API_KEY });
+    return workerFetch(logger, async (request, env, ctx) => {
+      logger.info("Hello from worker!");
+      return new Response("Hello");
+    })(request, env, ctx);
+  },
 };
 ```
 
@@ -34,21 +35,22 @@ This ensures logs are never lost due to Worker cold starts or short execution ti
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
-
 export default {
-  fetch: workerFetch(logger, async (request, env, ctx) => {
-    logger.info("Request received", { url: request.url, method: request.method });
-    
-    try {
-      const result = await handleRequest(request, env);
-      logger.info("Request completed", { status: 200 });
-      return result;
-    } catch (err) {
-      logger.logError(err, { message: "Request failed" });
-      return new Response("Internal Error", { status: 500 });
-    }
-  }),
+  fetch: (request, env, ctx) => {
+    const logger = flarelog({ apiKey: env.FLARELOG_API_KEY });
+    return workerFetch(logger, async (request, env, ctx) => {
+      logger.info("Request received", { url: request.url, method: request.method });
+
+      try {
+        const result = await handleRequest(request, env);
+        logger.info("Request completed", { status: 200 });
+        return result;
+      } catch (err) {
+        logger.logError(err, { message: "Request failed" });
+        return new Response("Internal Error", { status: 500 });
+      }
+    })(request, env, ctx);
+  },
 };
 ```
 
@@ -59,12 +61,13 @@ import { Hono } from "hono";
 import { flarelog } from "@flarelog/sdk";
 import { honoMiddleware } from "@flarelog/sdk/hono";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
-
 const app = new Hono();
 
-// One-line middleware setup
-app.use("*", honoMiddleware(logger));
+// Create one logger per request so env bindings are available
+app.use("*", async (c, next) => {
+  const logger = flarelog({ apiKey: c.env.FLARELOG_API_KEY });
+  return honoMiddleware(logger)(c, next);
+});
 
 app.get("/api/users/:id", async (c) => {
   const log = c.get("logger");
@@ -97,16 +100,20 @@ export default app;
 import { Router } from "itty-router";
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY, });
-
 const router = Router();
 
 router.get("/api/hello", async (request, env, ctx) => {
+  const logger = flarelog({ apiKey: env.FLARELOG_API_KEY });
   logger.info("Hello endpoint called");
   return new Response("Hello World!");
 });
 
-export default { fetch: workerFetch(logger, router.handle) };
+export default {
+  fetch: (request, env, ctx) => {
+    const logger = flarelog({ apiKey: env.FLARELOG_API_KEY });
+    return workerFetch(logger, router.handle)(request, env, ctx);
+  },
+};
 ```
 
 ## Durable Objects
@@ -117,9 +124,11 @@ import { FlareLog } from "@flarelog/sdk";
 
 export class ChatRoom extends DurableObject {
   private logger: FlareLog;
+  private ctx: DurableObjectState;
   
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.ctx = ctx;
     
     this.logger = new FlareLog({
       apiKey: env.FLARELOG_API_KEY,
@@ -129,10 +138,8 @@ export class ChatRoom extends DurableObject {
   }
   
   async fetch(request: Request) {
-    const traceId = request.headers.get("x-trace-id") || crypto.randomUUID();
-    
     return this.logger.withRequest(
-      { request, traceId },
+      { request, metadata: { roomId: this.ctx.id.toString() } },
       { waitUntil: (p) => this.ctx.waitUntil(p) },
       async () => {
         this.logger.info("Chat room request", {
@@ -152,17 +159,12 @@ export class ChatRoom extends DurableObject {
 ```typescript
 import { FlareLog } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  environment: "production",
-});
-
 export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     const logger = new FlareLog({
       apiKey: env.FLARELOG_API_KEY,
       environment: "production",
-      workerMode: true, // Enable worker-optimized batching
+      workerMode: true,
     });
     
     logger.info("Cron job started", {
@@ -310,28 +312,22 @@ export default {
 ```typescript
 import { FlareLog } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  environment: "production",
-});
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const traceId = request.headers.get("x-trace-id") || crypto.randomUUID();
-    
+    const logger = new FlareLog({
+      apiKey: env.FLARELOG_API_KEY,
+      environment: "production",
+    });
+
     return logger.withRequest(
-      { request, traceId },
+      { request },
       ctx,
       async () => {
         logger.info("API Gateway request", { path: new URL(request.url).pathname });
         
-        // Forward to backend worker with trace ID
-        const backendRequest = new Request(request, {
-          headers: {
-            ...Object.fromEntries(request.headers),
-            "x-trace-id": traceId,
-          },
-        });
+        // Forward to backend worker, propagating W3C trace context
+        const backendRequest = new Request(request);
+        logger.injectTraceContext(backendRequest.headers);
         
         try {
           const response = await env.BACKEND_WORKER.fetch(backendRequest);
@@ -349,8 +345,12 @@ export default {
 
 ## Environment Variables
 
-```typescript
-// wrangler.toml
+In Cloudflare Workers, environment variables and secrets are available only
+inside the handler's `env` argument — not on `process.env`. Pass them explicitly
+to `flarelog()` or `new FlareLog()`.
+
+```toml
+# wrangler.toml
 [vars]
 FLARELOG_ENVIRONMENT = "production"
 FLARELOG_RELEASE = "1.2.3"
@@ -373,16 +373,21 @@ interface Env {
 
 ```typescript
 // main.ts
-const logger = new FlareLog({
-  apiKey: env.FLARELOG_API_KEY,
-  environment: env.FLARELOG_ENVIRONMENT,
-  release: env.FLARELOG_RELEASE,
-});
+export default {
+  fetch(request, env, ctx) {
+    const logger = flarelog({
+      apiKey: env.FLARELOG_API_KEY,
+      environment: env.FLARELOG_ENVIRONMENT,
+      release: env.FLARELOG_RELEASE,
+    });
+    // ...
+  },
+};
 ```
 
 ## Best Practices
 
-1. **Use workerFetch() or withRequest()**: These handle flushing automatically with `ctx.waitUntil()` guarantee
+1. **Use workerFetch() or withRequest()**: These handle flushing with `ctx.waitUntil()` when available, falling back to blocking flush otherwise
 2. **Set workerMode for non-HTTP handlers**: For Cron, Queues, or manual handlers, set `workerMode: true` to prevent log loss
 3. **Set trace IDs**: Pass trace IDs between workers for distributed tracing
 4. **Use child loggers**: Create child loggers per request for context

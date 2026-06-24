@@ -170,7 +170,12 @@ The wrappers themselves do not read framework-specific env vars, but `flarelog()
 | Variable | Purpose |
 |----------|---------|
 | `FLARELOG_API_KEY` | Ships logs and traces to FlareLog |
+| `FLARELOG_ENDPOINT` | Override the Flarelog endpoint |
+| `FLARELOG_ENVIRONMENT` | Deployment environment name |
+| `FLARELOG_RELEASE` | Release version or git SHA |
+| `FLARELOG_SERVER_NAME` | Host or instance name |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Fan-out to any OTLP-compatible backend |
+| `OTEL_EXPORTER_OTLP_HEADERS` | OTLP headers (`Key=Value`) |
 | `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes (`service.name=foo`) |
 
 Use `FLARELOG_API_KEY` in your server-side code. If you also log from the browser, create a separate client-side logger that reads a *public* API key from `NEXT_PUBLIC_*` variables.
@@ -184,9 +189,10 @@ For React components, use the React integration instead:
 "use client";
 
 import { FlareLogErrorBoundary } from "@flarelog/sdk/react";
+import { clientLogger } from "../lib/flarelog-client";
 
 export function ErrorBoundaryWrapper({ children }: { children: React.ReactNode }) {
-  return <FlareLogErrorBoundary>{children}</FlareLogErrorBoundary>;
+  return <FlareLogErrorBoundary logger={clientLogger}>{children}</FlareLogErrorBoundary>;
 }
 ```
 
@@ -198,10 +204,11 @@ See [Browser Guide](./browser-guide.md) for `useFlareLog`, `useFlareLogPageView`
 
 ```typescript
 import type { NextApiRequest, NextApiResponse } from "next";
+import type { FlareLogLike } from "@flarelog/sdk";
 import { withFlareLog } from "@flarelog/sdk/next";
 
 export default withFlareLog(logger, async (
-  req: NextApiRequest & { logger: FlareLog; traceId: string },
+  req: NextApiRequest & { logger: FlareLogLike; traceId: string },
   res: NextApiResponse
 ) => {
   res.json({ ok: true });
