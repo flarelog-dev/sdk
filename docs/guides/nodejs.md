@@ -200,13 +200,15 @@ import { Observable } from "rxjs";
 import { tap } from "rxjs/operators";
 import { FlareLogService } from "./flarelog.service";
 
+import { randomUUID } from "node:crypto";
+
 @Injectable()
 export class FlareLogInterceptor implements NestInterceptor {
   constructor(private flarelogService: FlareLogService) {}
   
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
-  const traceId = request.headers["x-trace-id"] || randomUUID();
+    const traceId = request.headers["x-trace-id"] || randomUUID();
     
     const logger = this.flarelogService.createChild({
       source: "nestjs",

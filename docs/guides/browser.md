@@ -211,9 +211,9 @@ function App() {
 
 ```typescript
 // plugins/flarelog.ts
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog } from "@flarelog/sdk";
 
-const logger = new FlareLog({
+const logger = flarelog({
   apiKey: import.meta.env.VITE_FLARELOG_API_KEY,
   environment: import.meta.env.MODE,
   autoCapture: {
@@ -276,9 +276,9 @@ For server-side routes use `@flarelog/sdk/next`. For client-side React component
 
 ```typescript
 // lib/flarelog-client.ts (client-side logger)
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog } from "@flarelog/sdk";
 
-export const clientLogger = new FlareLog({
+export const clientLogger = flarelog({
   apiKey: process.env.NEXT_PUBLIC_FLARELOG_API_KEY,
   environment: process.env.NODE_ENV,
   release: process.env.VERCEL_GIT_COMMIT_SHA || "dev",
@@ -366,9 +366,9 @@ For App Router setup, Edge Middleware, and W3C trace propagation, see the dedica
 
 ```typescript
 // lib/flarelog.ts
-import { FlareLog } from "@flarelog/sdk";
+import { flarelog } from "@flarelog/sdk";
 
-export const logger = new FlareLog({
+export const logger = flarelog({
   apiKey: import.meta.env.VITE_FLARELOG_API_KEY,
   environment: import.meta.env.MODE,
   autoCapture: {
@@ -514,7 +514,7 @@ export const store = configureStore({
 
 ```typescript
 // Scrub PII
-const logger = new FlareLog({
+const logger = flarelog({
   beforeSend: (log) => {
     // Remove sensitive fields
     const scrubbed = { ...log };
@@ -537,7 +537,7 @@ const logger = new FlareLog({
 });
 
 // Filter out health checks
-const logger = new FlareLog({
+const logger = flarelog({
   beforeSend: (log) => {
     if (log.message?.includes("/health")) {
       return false; // Drop health check logs
@@ -547,7 +547,7 @@ const logger = new FlareLog({
 });
 
 // Add custom metadata
-const logger = new FlareLog({
+const logger = flarelog({
   beforeSend: (log) => ({
     ...log,
     metadata: {
