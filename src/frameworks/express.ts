@@ -1,5 +1,4 @@
 import type { FlareLog, FlareLogChild } from "../client";
-import { randomUUID } from "node:crypto";
 
 // Inline types to avoid Express dependency
 interface Request {
@@ -21,6 +20,26 @@ interface NextFunction {
 }
 
 /**
+ * Generate a UUID without depending on Node's `node:crypto` module.
+ *
+ * Uses `crypto.randomUUID()` when available (Node 19+, browsers, Workers, Edge).
+ * Falls back to a Math.random-based v4 UUID for Node 18 and other runtimes
+ * where `randomUUID` is missing.
+ */
+function generateTraceId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  // Minimal v4 UUID fallback
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
  * Express middleware for automatic request logging.
  * 
  * - Attaches `req.logger` with request context
@@ -38,7 +57,7 @@ interface NextFunction {
  */
 export function expressMiddleware(logger: FlareLog) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const traceId = (req.headers["x-trace-id"] as string) || randomUUID();
+    const traceId = (req.headers["x-trace-id"] as string) || generateTraceId();
     req.traceId = traceId;
 
     const child = logger.child({
