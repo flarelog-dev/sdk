@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'FlareLog SDK',
-  description: 'Zero-dependency observability SDK. Ships logs, errors, and W3C traces from any JavaScript runtime to FlareLog or any OTLP backend.',
+  description: 'Zero-dependency observability SDK. Ship logs, errors, and traces from any JavaScript runtime to FlareLog or any OTLP backend.',
   base: '/sdk/',
   cleanUrls: true,
   lastUpdated: true,
@@ -24,10 +24,12 @@ export default defineConfig({
     
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Quick Start', link: '/quick-start' },
-      { text: 'Guides', link: '/guides/browser-guide' },
+      { text: 'Getting Started', link: '/getting-started/installation' },
+      { text: 'Core API', link: '/core-api/' },
+      { text: 'Guides', link: '/guides/browser' },
       { text: 'Platforms', link: '/platforms/cloudflare-workers' },
-      { text: 'Frameworks', link: '/frameworks/next' },
+      { text: 'Frameworks', link: '/frameworks/nextjs' },
+      { text: 'OTel Integration', link: '/otel-integration/overview' },
       { 
         text: 'v2.3.1',
         items: [
@@ -38,11 +40,26 @@ export default defineConfig({
     ],
 
     sidebar: {
-      '/quick-start': [
+      '/getting-started/': [
         {
           text: 'Getting Started',
           items: [
-            { text: 'Quick Start', link: '/quick-start' },
+            { text: 'Installation', link: '/getting-started/installation' },
+            { text: 'Choosing Integration', link: '/getting-started/choosing-integration' },
+          ]
+        }
+      ],
+      '/core-api/': [
+        {
+          text: 'Core API',
+          items: [
+            { text: 'Overview', link: '/core-api/' },
+            { text: 'FlareLog Class', link: '/core-api/flarelog-class' },
+            { text: 'FlareLogChild Class', link: '/core-api/flarelog-child' },
+            { text: 'Configuration', link: '/core-api/configuration' },
+            { text: 'Logging Methods', link: '/core-api/logging-methods' },
+            { text: 'Error Handling', link: '/core-api/error-handling' },
+            { text: 'Transports', link: '/core-api/transports' },
           ]
         }
       ],
@@ -50,9 +67,9 @@ export default defineConfig({
         {
           text: 'Guides',
           items: [
-            { text: 'Browser Guide', link: '/guides/browser-guide' },
-            { text: 'Node.js Guide', link: '/guides/nodejs-guide' },
-            { text: 'Advanced Features', link: '/guides/advanced-features' },
+            { text: 'Browser', link: '/guides/browser' },
+            { text: 'Node.js', link: '/guides/nodejs' },
+            { text: 'Advanced Features', link: '/guides/advanced' },
           ]
         }
       ],
@@ -69,8 +86,18 @@ export default defineConfig({
         {
           text: 'Frameworks',
           items: [
-            { text: 'Next.js', link: '/frameworks/next' },
+            { text: 'Next.js', link: '/frameworks/nextjs' },
             { text: 'TanStack Start', link: '/frameworks/tanstack-start' },
+          ]
+        }
+      ],
+      '/otel-integration/': [
+        {
+          text: 'OTel Integration',
+          items: [
+            { text: 'Overview', link: '/otel-integration/overview' },
+            { text: 'Trace Propagation', link: '/otel-integration/trace-propagation' },
+            { text: 'Fan-out', link: '/otel-integration/fan-out' },
           ]
         }
       ],

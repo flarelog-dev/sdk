@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate API docs
+        run: npx typedoc --options typedoc.json
+
       - name: Build docs
         run: npm run docs:build
 

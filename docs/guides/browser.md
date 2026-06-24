@@ -360,7 +360,7 @@ export const GET = withNextRouteHandler(logger, async (request) => {
 });
 ```
 
-For App Router setup, Edge Middleware, and W3C trace propagation, see the dedicated [Next.js guide](/frameworks/next).
+For App Router setup, Edge Middleware, and W3C trace propagation, see the dedicated [Next.js guide](/frameworks/nextjs).
 
 ### Svelte / SvelteKit
 

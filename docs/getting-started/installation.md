@@ -256,6 +256,6 @@ logger.destroy()
 
 - [Cloudflare Workers Guide](/platforms/cloudflare-workers) - Workers, Durable Objects, Queues, Cron
 - [Vercel Guide](/platforms/vercel) - Serverless Functions, Edge Functions, Middleware
-- [Browser Guide](/guides/browser-guide) - React, Vue, Next.js, Svelte
-- [Node.js Guide](/guides/nodejs-guide) - Express, Fastify, NestJS
-- [Advanced Features](/guides/advanced-features) - Breadcrumbs, tags, beforeSend, spans
+- [Browser Guide](/guides/browser) - React, Vue, Next.js, Svelte
+- [Node.js Guide](/guides/nodejs) - Express, Fastify, NestJS
+- [Advanced Features](/guides/advanced) - Breadcrumbs, tags, beforeSend, spans
