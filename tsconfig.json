@@ -20,6 +20,6 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "include": ["src/**/*", "docs/.vitepress/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "dist-docs"]
 }
