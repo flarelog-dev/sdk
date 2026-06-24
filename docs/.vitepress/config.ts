@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'FlareLog SDK',
   description: 'Zero-dependency observability SDK. Ship logs, errors, and traces from any JavaScript runtime to FlareLog or any OTLP backend.',
-  base: '/sdk/',
+  base: '/',
   cleanUrls: true,
   lastUpdated: true,
   
