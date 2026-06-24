@@ -1,6 +1,7 @@
 import type { ReadableSpan, ReadableLogRecord } from "./types";
 import { createExportLogsServiceRequest, createExportTraceServiceRequest } from "./otlp-serializer";
 import type { Transport } from "./transport";
+import { runWithHookSkipped } from "../console";
 
 export interface OTLPTransportConfig {
   /** Base URL, e.g. https://otlp-gateway-prod-eu-west-0.grafana.net */
@@ -102,8 +103,10 @@ export class OTLPTransport implements Transport {
     }
     // Don't throw — transport errors shouldn't crash the app.
     // Log to console so the developer knows their backend is unreachable.
-    // eslint-disable-next-line no-console
-    console.error(`[FlareLog] OTLP export to ${url} failed after ${this.maxRetries + 1} attempts:`, lastErr);
+    runWithHookSkipped(() => {
+      // eslint-disable-next-line no-console
+      console.error(`[FlareLog] OTLP export to ${url} failed after ${this.maxRetries + 1} attempts:`, lastErr);
+    });
   }
 
   private async send(url: string, body: unknown): Promise<void> {

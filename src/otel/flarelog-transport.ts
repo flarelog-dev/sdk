@@ -1,6 +1,7 @@
 import type { ReadableSpan, ReadableLogRecord } from "./types";
 import { createExportLogsServiceRequest, createExportTraceServiceRequest } from "./otlp-serializer";
 import type { Transport } from "./transport";
+import { runWithHookSkipped } from "../console";
 
 export interface FlarelogTransportConfig {
   /** Flarelog API key (required — this is the gated, paid backend) */
@@ -82,12 +83,16 @@ export class FlarelogTransport implements Transport {
       });
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        // eslint-disable-next-line no-console
-        console.error(`[FlareLog] Flarelog export failed: HTTP ${response.status}: ${text}`);
+        runWithHookSkipped(() => {
+          // eslint-disable-next-line no-console
+          console.error(`[FlareLog] Flarelog export failed: HTTP ${response.status}: ${text}`);
+        });
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(`[FlareLog] Flarelog export to ${url} failed:`, err);
+      runWithHookSkipped(() => {
+        // eslint-disable-next-line no-console
+        console.error(`[FlareLog] Flarelog export to ${url} failed:`, err);
+      });
     } finally {
       clearTimeout(timer);
     }

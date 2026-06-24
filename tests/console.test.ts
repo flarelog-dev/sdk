@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FlareLog } from "../src/client";
 import { runWithHookSkipped } from "../src/console";
+import { ConsoleTransport } from "../src/otel/console-transport";
+import type { ReadableLogRecord } from "../src/otel/types";
 import {
   extractOtlpLogs,
   attrsToObject,
@@ -110,5 +112,36 @@ describe("console hooks", () => {
     expect(rawError).toBeDefined();
     const errorObj = JSON.parse(rawError!) as { message: string };
     expect(errorObj).toMatchObject({ message: "nested" });
+  });
+
+  it("ConsoleTransport does not re-trigger console hooks", async () => {
+    const transport = new ConsoleTransport();
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    logger.installConsoleHooks();
+
+    await transport.exportLogs([
+      {
+        hrTime: [0, 0],
+        severityText: "ERROR",
+        body: "transport line",
+        attributes: {},
+      } as unknown as ReadableLogRecord,
+    ]);
+
+    // The transport should emit the line exactly once through console.error.
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+
+    // Because the transport writes are hook-skipped, no new captured log is
+    // produced by the hook.
+    await logger.flush();
+    const logs = getLogCalls(fetchMock)
+      .flatMap((body) => (body ? extractOtlpLogs(body) : []));
+    const transportLogs = logs.filter((l) =>
+      l.body?.stringValue?.includes("transport line")
+    );
+    expect(transportLogs).toHaveLength(0);
+
+    consoleSpy.mockRestore();
   });
 });

@@ -1,5 +1,6 @@
 import type { ReadableSpan, ReadableLogRecord } from "./types";
 import type { Transport } from "./transport";
+import { runWithHookSkipped } from "../console";
 
 const LEVEL_COLORS: Record<string, string> = {
   TRACE: "\x1b[90m",   // gray
@@ -79,20 +80,24 @@ export class ConsoleTransport implements Transport {
       const line = formatLog(log);
       const level = log.severityText ?? "INFO";
       // route fatal/error/warn to console.error, others to console.log
-      if (level === "FATAL" || level === "ERROR" || level === "WARN") {
-        // eslint-disable-next-line no-console
-        console.error(line);
-      } else {
-        // eslint-disable-next-line no-console
-        console.log(line);
-      }
+      runWithHookSkipped(() => {
+        if (level === "FATAL" || level === "ERROR" || level === "WARN") {
+          // eslint-disable-next-line no-console
+          console.error(line);
+        } else {
+          // eslint-disable-next-line no-console
+          console.log(line);
+        }
+      });
     }
   }
 
   async exportSpans(spans: ReadableSpan[]): Promise<void> {
     for (const span of spans) {
-      // eslint-disable-next-line no-console
-      console.log(formatSpan(span));
+      runWithHookSkipped(() => {
+        // eslint-disable-next-line no-console
+        console.log(formatSpan(span));
+      });
     }
   }
 
