@@ -258,15 +258,17 @@ function handleClick() {
 
 ### Next.js
 
+For server-side routes use `@flarelog/sdk/next`. For client-side React components use `@flarelog/sdk/react`.
+
 ```typescript
-// lib/flarelog.ts
+// lib/flarelog-client.ts (client-side logger)
 import { FlareLog } from "@flarelog/sdk";
 
-export const logger = new FlareLog({
-  apiKey: process.env.NEXT_PUBLIC_FLARELOG_API_KEY!,
+export const clientLogger = new FlareLog({
+  apiKey: process.env.NEXT_PUBLIC_FLARELOG_API_KEY,
   environment: process.env.NODE_ENV,
   release: process.env.VERCEL_GIT_COMMIT_SHA || "dev",
-  serverName: typeof window === "undefined" ? "server" : "client",
+  serverName: "browser",
   autoCapture: {
     console: true,
     globalErrors: true,
@@ -282,25 +284,26 @@ export const logger = new FlareLog({
   },
 });
 
-// pages/_app.tsx (Pages Router)
+// pages/_app.tsx (Pages Router application shell)
 import type { AppProps } from "next/app";
 import { useEffect } from "react";
-import { logger } from "../lib/flarelog";
+import { clientLogger } from "../lib/flarelog-client";
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   useEffect(() => {
     // Track page views
-    logger.info("Page view", {
+    clientLogger.info("Page view", {
       path: window.location.pathname,
       referrer: document.referrer,
     });
   }, []);
-  
+
   return <Component {...pageProps} />;
 }
 
-// app/layout.tsx (App Router)
-import { FlareLogProvider } from "../components/FlareLogProvider";
+// app/layout.tsx (App Router application shell)
+import { FlareLogErrorBoundary } from "@flarelog/sdk/react";
+import { clientLogger } from "../lib/flarelog-client";
 
 export default function RootLayout({
   children,
@@ -310,58 +313,39 @@ export default function RootLayout({
   return (
     <html>
       <body>
-        <FlareLogProvider>{children}</FlareLogProvider>
+        <FlareLogErrorBoundary logger={clientLogger}>
+          {children}
+        </FlareLogErrorBoundary>
       </body>
     </html>
   );
 }
 
-// components/FlareLogProvider.tsx
-"use client";
-
-import { useEffect } from "react";
-import { logger } from "../lib/flarelog";
-
-export function FlareLogProvider({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    logger.info("Page mounted", {
-      path: window.location.pathname,
-    });
-  }, []);
-  
-  return <>{children}</>;
-}
-
 // API Routes (pages/api/hello.ts)
-import type { NextApiRequest, NextApiResponse } from "next";
-import { logger } from "../../lib/flarelog";
+import { flarelog } from "@flarelog/sdk";
+import { withFlareLog } from "@flarelog/sdk/next";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const traceId = req.headers["x-trace-id"] as string || crypto.randomUUID();
-  
-  logger.setTag("api", "hello");
-  logger.info("API request", {
-    method: req.method,
-    path: req.url,
-    traceId,
-  });
-  
-  try {
-    const data = await fetchData();
-    logger.info("API response", { traceId, status: 200 });
-    res.status(200).json(data);
-  } catch (err) {
-    logger.logError(err, {
-      message: "API error",
-      metadata: { traceId, path: req.url },
-    });
-    res.status(500).json({ error: "Internal error" });
-  }
-}
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+
+export default withFlareLog(logger, async (req, res) => {
+  req.logger.info("API request", { method: req.method, path: req.url });
+
+  const data = await fetchData();
+  res.status(200).json(data);
+});
+
+// App Router Route Handler (app/api/hello/route.ts)
+import { flarelog } from "@flarelog/sdk";
+import { withNextRouteHandler } from "@flarelog/sdk/next";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+
+export const GET = withNextRouteHandler(logger, async (request) => {
+  return Response.json({ message: "Hello from App Router!" });
+});
 ```
+
+For App Router setup, Edge Middleware, and W3C trace propagation, see the dedicated [Next.js guide](./next.md).
 
 ### Svelte / SvelteKit
 
