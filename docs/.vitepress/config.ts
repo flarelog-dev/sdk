@@ -23,7 +23,6 @@ export default defineConfig({
     logo: '/logo.svg',
     
     nav: [
-      { text: 'Home', link: '/' },
       { text: 'Getting Started', link: '/getting-started/installation' },
       { text: 'Core API', link: '/core-api/' },
       { text: 'Guides', link: '/guides/browser' },
