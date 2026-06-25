@@ -148,6 +148,34 @@ export function getTraceCalls(fetchMock: ReturnType<typeof vi.fn>): unknown[] {
     });
 }
 
+/** Get the URLs that fetch was called with. */
+export function getFetchUrls(fetchMock: ReturnType<typeof vi.fn>): string[] {
+  return fetchMock.mock.calls.map((c) => String(c[0]));
+}
+
+/** Count how many times fetch was called. */
+export function getFetchCallCount(fetchMock: ReturnType<typeof vi.fn>): number {
+  return fetchMock.mock.calls.length;
+}
+
+/** Check if fetch was ever called (at all). */
+export function wasFetchCalled(fetchMock: ReturnType<typeof vi.fn>): boolean {
+  return fetchMock.mock.calls.length > 0;
+}
+
+/** Check if fetch was called for a specific URL pattern. */
+export function wasFetchCalledForUrl(fetchMock: ReturnType<typeof vi.fn>, urlPattern: string | RegExp): boolean {
+  return fetchMock.mock.calls.some((c) => {
+    const url = String(c[0]);
+    return typeof urlPattern === "string" ? url.includes(urlPattern) : urlPattern.test(url);
+  });
+}
+
+/** Get all console.error calls during a test. */
+export function getConsoleErrors(errorSpy: ReturnType<typeof vi.fn>): string[] {
+  return errorSpy.mock.calls.map((c) => c.map((arg: unknown) => typeof arg === "string" ? arg : JSON.stringify(arg)).join(" "));
+}
+
 /** Mock fetch that returns success for all calls. */
 export function mockFetch() {
   return vi.fn().mockImplementation(async () => ({
@@ -156,4 +184,75 @@ export function mockFetch() {
     text: async () => "",
     json: async () => ({}),
   }));
+}
+
+/** Mock fetch that fails with a network error on every call. */
+export function mockFailingFetch(error?: Error) {
+  const err = error ?? new Error("Network error: Connection refused");
+  return vi.fn().mockImplementation(async () => {
+    throw err;
+  });
+}
+
+/** Mock fetch that returns HTTP error status on every call. */
+export function mockHttpErrorFetch(status: number, statusText?: string) {
+  return vi.fn().mockImplementation(async () => ({
+    ok: false,
+    status,
+    statusText: statusText ?? `HTTP ${status}`,
+    text: async () => `{"error": "${statusText ?? "Bad Request"}"}`,
+    json: async () => ({ error: statusText ?? "Bad Request" }),
+  }));
+}
+
+/** Mock fetch that fails a specified number of times then succeeds. */
+export function mockFlakyFetch(failCount: number, error?: Error) {
+  let attempts = 0;
+  const err = error ?? new Error("Network error: Connection refused");
+  return vi.fn().mockImplementation(async () => {
+    attempts++;
+    if (attempts <= failCount) {
+      throw err;
+    }
+    return {
+      ok: true,
+      status: 200,
+      text: async () => "",
+      json: async () => ({}),
+    };
+  });
+}
+
+/** Mock fetch that returns a delayed response (simulates timeout-prone scenarios). */
+export function mockSlowFetch(delayMs: number, shouldSucceed = true) {
+  return vi.fn().mockImplementation(async () => {
+    await new Promise((r) => setTimeout(r, delayMs));
+    if (!shouldSucceed) {
+      throw new Error("Request timed out");
+    }
+    return {
+      ok: true,
+      status: 200,
+      text: async () => "",
+      json: async () => ({}),
+    };
+  });
+}
+
+/** Wait for a specified duration (useful for timer-based flush tests). */
+export function wait(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Capture all unhandled promise rejections during a test. */
+export function captureRejection(): { rejections: unknown[]; stop: () => void } {
+  const rejections: unknown[] = [];
+  const handler = (reason: unknown) => {
+    rejections.push(reason);
+  };
+  process.on("unhandledRejection", handler);
+  return {
+    rejections,
+    stop: () => process.off("unhandledRejection", handler),
+  };
 }
