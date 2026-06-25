@@ -154,6 +154,85 @@ export class ChatRoom extends DurableObject {
 }
 ```
 
+## Cloudflare Pages Functions
+
+Cloudflare Pages Functions use the same Workers runtime but have a different API shape. The `pagesFunction()` wrapper handles this automatically:
+
+```typescript
+// functions/api/hello.ts
+import { flarelog, pagesFunction } from "@flarelog/sdk";
+
+const logger = flarelog({ apiKey: "fl_your_key" });
+
+export const onRequest = pagesFunction(logger, async (context) => {
+  logger.info("Hello from Pages", { url: context.request.url });
+  return new Response("Hello from Pages Functions!");
+});
+```
+
+### With Middleware
+
+```typescript
+// functions/_middleware.ts
+import { flarelog, pagesFunction } from "@flarelog/sdk";
+
+const logger = flarelog({});
+
+export const onRequest = pagesFunction(logger, async (context) => {
+  logger.info("Middleware running", { path: new URL(context.request.url).pathname });
+  return context.next();
+});
+```
+
+### Dynamic Routes
+
+```typescript
+// functions/api/users/[id].ts
+import { flarelog, pagesFunction } from "@flarelog/sdk";
+
+const logger = flarelog({ apiKey: "fl_your_key" });
+
+export const onRequest = pagesFunction(logger, async (context) => {
+  const userId = context.params?.id;
+  logger.info("Fetching user", { userId });
+  
+  try {
+    const user = await context.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
+    
+    if (!user) {
+      logger.warn("User not found", { userId });
+      return new Response("Not found", { status: 404 });
+    }
+    
+    logger.info("User fetched", { userId });
+    return Response.json(user);
+  } catch (err) {
+    logger.logError(err, { message: "Failed to fetch user", metadata: { userId } });
+    return new Response("Internal error", { status: 500 });
+  }
+});
+```
+
+### Pages Functions with waitUntil
+
+The `pagesFunction()` wrapper automatically handles `context.waitUntil()` for flushing telemetry, just like `workerFetch()` does for standard Workers:
+
+```typescript
+import { flarelog, pagesFunction } from "@flarelog/sdk";
+
+const logger = flarelog({ apiKey: "fl_your_key" });
+
+export const onRequest = pagesFunction(logger, async (context) => {
+  // Logs are automatically flushed via context.waitUntil()
+  logger.info("Processing request");
+  
+  // You can also manually wait for async operations
+  context.waitUntil(someBackgroundTask());
+  
+  return new Response("OK");
+});
+```
+
 ## Cron Triggers
 
 ```typescript

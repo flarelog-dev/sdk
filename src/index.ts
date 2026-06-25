@@ -5,7 +5,7 @@ export { FlareLog, FlareLogChild } from "./client";
 export { flarelog } from "./factory";
 
 // Framework helpers
-export { workerFetch } from "./frameworks/cf-workers";
+export { workerFetch, pagesFunction } from "./frameworks/cf-workers";
 export {
   withVercelServerless,
   withVercelEdge,
@@ -55,6 +55,8 @@ export type {
   TransportConfig,
   UserContext,
   Breadcrumb,
+  PagesFunctionHandler,
+  PagesFunctionContext,
 } from "./types";
 
 // Utilities

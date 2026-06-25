@@ -273,6 +273,33 @@ export interface ExecutionContextLike {
 }
 
 /**
+ * Cloudflare Pages Function context shape (used in `functions/` directory).
+ * This is the context object passed to `onRequest` handlers in Pages Functions.
+ * Pages Functions run on the same Workers runtime but have a different API shape.
+ */
+export interface PagesFunctionContext {
+  /** The incoming Request object */
+  request: Request;
+  /** Environment variables and bindings (KV, D1, R2, etc.) */
+  env: Record<string, unknown>;
+  /** Wait until a promise resolves before the function ends */
+  waitUntil: (promise: Promise<unknown>) => void;
+  /** Next function in the middleware chain (if using middleware) */
+  next?: () => Promise<Response>;
+  /** Data passed between middlewares */
+  data?: Record<string, unknown>;
+  /** Function parameters from dynamic routes */
+  params?: Record<string, string>;
+}
+
+/**
+ * Cloudflare Pages Function handler signature
+ */
+export type PagesFunctionHandler<T = Response> = (
+  context: PagesFunctionContext
+) => Promise<T>;
+
+/**
  * Cloudflare Worker fetch handler signature
  */
 export type WorkerFetchHandler<T = Response> = (
