@@ -12,9 +12,12 @@ interface BatchConfig {
 }
 
 /**
+ * @deprecated This is the legacy v1 batching implementation. Use the OTel-native
+ * batch processors in providers.ts instead. This class will be removed in v3.
+ *
  * Buffers logs and flushes them in batches.
  * Works in both Node.js and Cloudflare Workers environments.
- * 
+ *
  * Worker mode: flushes immediately on every log (batchSize=1, no timer)
  * Normal mode: batches by count and timer
  */

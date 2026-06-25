@@ -3,6 +3,7 @@ import { ensureContextManager, getSpanContext } from "./context";
 import { activeContext } from "./context";
 import { SimpleTracerProvider } from "./span";
 import type { Transport } from "./transport";
+import { runWithHookSkipped } from "../console";
 
 export interface ProviderOptions {
   resource: Resource;
@@ -41,18 +42,28 @@ class SimpleSpanProcessor {
 
 class BatchSpanProcessor {
   private queue: ReadableSpan[] = [];
-  private timer?: ReturnType<typeof setTimeout>;
+  private timer?: ReturnType<typeof setInterval>;
   private readonly maxQueueSize: number;
   private readonly scheduledDelayMillis: number;
   private exporter: TransportSpanExporter;
+  private readonly debug: boolean;
 
-  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number }) {
+  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number; debug?: boolean }) {
     this.maxQueueSize = opts.maxQueueSize;
     this.scheduledDelayMillis = opts.scheduledDelayMillis;
     this.exporter = new TransportSpanExporter(transport);
+    this.debug = opts.debug ?? false;
     if (this.scheduledDelayMillis > 0) {
-      this.timer = setInterval(() => { this.flush().catch(() => {}); }, this.scheduledDelayMillis);
+      this.timer = setInterval(() => { this.flush().catch((err) => this.logError("BatchSpanProcessor timer flush failed", err)); }, this.scheduledDelayMillis);
     }
+  }
+
+  private logError(message: string, err: unknown): void {
+    if (!this.debug) return;
+    runWithHookSkipped(() => {
+      // eslint-disable-next-line no-console
+      console.error(`[FlareLog] ${message}:`, err);
+    });
   }
 
   async onEnd(span: ReadableSpan): Promise<void> {
@@ -65,7 +76,20 @@ class BatchSpanProcessor {
   async flush(): Promise<void> {
     if (this.queue.length === 0) return;
     const batch = this.queue.splice(0, this.queue.length);
-    await this.exporter.export(batch);
+    try {
+      await this.exporter.export(batch);
+    } catch (err) {
+      // Put failed batch back at the front of the queue
+      this.queue.unshift(...batch);
+      // If queue exceeds max size, drop oldest items (from the end)
+      if (this.queue.length > this.maxQueueSize) {
+        const dropped = this.queue.length - this.maxQueueSize;
+        this.queue = this.queue.slice(0, this.maxQueueSize);
+        this.logError(`Dropped ${dropped} spans due to buffer overflow`, err);
+      } else {
+        this.logError("Span export failed, returned to queue", err);
+      }
+    }
   }
 
   async forceFlush(): Promise<void> { await this.flush(); await this.exporter.forceFlush(); }
@@ -90,18 +114,28 @@ class SimpleLogProcessor {
 
 class BatchLogProcessor {
   private queue: ReadableLogRecord[] = [];
-  private timer?: ReturnType<typeof setTimeout>;
+  private timer?: ReturnType<typeof setInterval>;
   private readonly maxQueueSize: number;
   private readonly scheduledDelayMillis: number;
   private exporter: TransportLogExporter;
+  private readonly debug: boolean;
 
-  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number }) {
+  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number; debug?: boolean }) {
     this.maxQueueSize = opts.maxQueueSize;
     this.scheduledDelayMillis = opts.scheduledDelayMillis;
     this.exporter = new TransportLogExporter(transport);
+    this.debug = opts.debug ?? false;
     if (this.scheduledDelayMillis > 0) {
-      this.timer = setInterval(() => { this.flush().catch(() => {}); }, this.scheduledDelayMillis);
+      this.timer = setInterval(() => { this.flush().catch((err) => this.logError("BatchLogProcessor timer flush failed", err)); }, this.scheduledDelayMillis);
     }
+  }
+
+  private logError(message: string, err: unknown): void {
+    if (!this.debug) return;
+    runWithHookSkipped(() => {
+      // eslint-disable-next-line no-console
+      console.error(`[FlareLog] ${message}:`, err);
+    });
   }
 
   async onEmit(log: ReadableLogRecord): Promise<void> {
@@ -114,7 +148,20 @@ class BatchLogProcessor {
   async flush(): Promise<void> {
     if (this.queue.length === 0) return;
     const batch = this.queue.splice(0, this.queue.length);
-    await this.exporter.export(batch);
+    try {
+      await this.exporter.export(batch);
+    } catch (err) {
+      // Put failed batch back at the front of the queue
+      this.queue.unshift(...batch);
+      // If queue exceeds max size, drop oldest items (from the end)
+      if (this.queue.length > this.maxQueueSize) {
+        const dropped = this.queue.length - this.maxQueueSize;
+        this.queue = this.queue.slice(0, this.maxQueueSize);
+        this.logError(`Dropped ${dropped} logs due to buffer overflow`, err);
+      } else {
+        this.logError("Log export failed, returned to queue", err);
+      }
+    }
   }
 
   async forceFlush(): Promise<void> { await this.flush(); await this.exporter.forceFlush(); }
@@ -129,11 +176,13 @@ class FlareLogLoggerProvider implements LoggerProvider {
   private resource: Resource;
   private scope: InstrumentationScope;
   private processors: Array<SimpleLogProcessor | BatchLogProcessor>;
+  private readonly debug: boolean;
 
-  constructor(resource: Resource, scope: InstrumentationScope, processors: Array<SimpleLogProcessor | BatchLogProcessor>) {
+  constructor(resource: Resource, scope: InstrumentationScope, processors: Array<SimpleLogProcessor | BatchLogProcessor>, debug?: boolean) {
     this.resource = resource;
     this.scope = scope;
     this.processors = processors;
+    this.debug = debug ?? false;
   }
 
   getLogger(name: string, version?: string): Logger {
@@ -155,7 +204,14 @@ class FlareLogLoggerProvider implements LoggerProvider {
           spanContext: spanCtx,
         };
         for (const p of this.processors) {
-          p.onEmit(logRecord).catch(() => {});
+          p.onEmit(logRecord).catch((err) => {
+            if (this.debug) {
+              runWithHookSkipped(() => {
+                // eslint-disable-next-line no-console
+                console.error("[FlareLog] Log processor error:", err);
+              });
+            }
+          });
         }
       },
     };
@@ -192,22 +248,31 @@ export function initProviders(opts: ProviderOptions): {
       spanProcessors.push(new BatchSpanProcessor(transport, {
         maxQueueSize: opts.maxQueueSize ?? 100,
         scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
+        debug: opts.debug,
       }));
       logProcessors.push(new BatchLogProcessor(transport, {
         maxQueueSize: opts.maxQueueSize ?? 100,
         scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
+        debug: opts.debug,
       }));
     }
   }
 
   const onSpanEnd = (span: ReadableSpan) => {
     for (const p of spanProcessors) {
-      p.onEnd(span).catch(() => {});
+      p.onEnd(span).catch((err) => {
+        if (opts.debug) {
+          runWithHookSkipped(() => {
+            // eslint-disable-next-line no-console
+            console.error("[FlareLog] Span processor error:", err);
+          });
+        }
+      });
     }
   };
 
   const tracerProvider = new SimpleTracerProvider(opts.resource, onSpanEnd);
-  const loggerProvider = new FlareLogLoggerProvider(opts.resource, scope, logProcessors);
+  const loggerProvider = new FlareLogLoggerProvider(opts.resource, scope, logProcessors, opts.debug);
 
   const flush = async () => {
     await Promise.all([

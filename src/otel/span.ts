@@ -1,6 +1,7 @@
-import type { HrTime, ReadableSpan, Resource, SpanContext, SpanOptions, SpanStatus, TimedEvent, InstrumentationScope } from "./types";
+import type { HrTime, ReadableSpan, Resource, SpanContext, SpanOptions, SpanStatus, TimedEvent, InstrumentationScope, Context } from "./types";
 import { SpanKind, SpanStatusCode, type Span as ISpan, type Tracer as ITracer, type TracerProvider } from "./types";
 import { EXTRACTED_SPAN_CONTEXT_KEY } from "./propagation";
+import { getSpanContext } from "./context";
 
 function nowHrTime(): HrTime {
   const ms = Date.now();
@@ -156,8 +157,8 @@ export class Tracer implements ITracer {
     this._onSpanEnd = onSpanEnd;
   }
 
-  startSpan(name: string, options?: SpanOptions, parentContext?: { get(key: symbol): unknown }): Span {
-    const parentSpanCtx = parentContext?.get(EXTRACTED_SPAN_CONTEXT_KEY) as SpanContext | undefined;
+  startSpan(name: string, options?: SpanOptions, parentContext?: Context): Span {
+    const parentSpanCtx = parentContext ? (getSpanContext(parentContext) ?? parentContext.get(EXTRACTED_SPAN_CONTEXT_KEY) as SpanContext | undefined) : undefined;
     const span = new Span(name, options?.kind ?? SpanKind.INTERNAL, this._resource, this._scope, options, parentSpanCtx);
     span.setOnEnd(this._onSpanEnd);
     return span;

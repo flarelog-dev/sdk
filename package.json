@@ -1,6 +1,6 @@
 {
   "name": "@flarelog/sdk",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Zero-dependency observability SDK. Ships logs, errors, and W3C traces from Cloudflare Workers, Vercel, Node.js, or the browser to FlareLog or any OTLP backend.",
   "keywords": [
     "logging",

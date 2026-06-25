@@ -14,6 +14,8 @@ export interface FlarelogTransportConfig {
   enableTraces?: boolean;
   /** Timeout per request in ms. Default 5000. */
   timeoutMs?: number;
+  /** Max retries on network failure. Default 1. */
+  maxRetries?: number;
 }
 
 /**
@@ -35,6 +37,7 @@ export class FlarelogTransport implements Transport {
   private readonly tracesUrl: string;
   private readonly enableTraces: boolean;
   private readonly timeoutMs: number;
+  private readonly maxRetries: number;
 
   constructor(config: FlarelogTransportConfig) {
     if (!config.apiKey) {
@@ -54,18 +57,39 @@ export class FlarelogTransport implements Transport {
     this.tracesUrl = `${endpoint}/api/v1/traces`;
     this.enableTraces = config.enableTraces ?? true;
     this.timeoutMs = config.timeoutMs ?? 5000;
+    this.maxRetries = config.maxRetries ?? 1;
   }
 
   async exportLogs(logs: ReadableLogRecord[]): Promise<void> {
     if (logs.length === 0) return;
     const body = createExportLogsServiceRequest(logs);
-    await this.send(this.logsUrl, body);
+    await this.sendWithRetry(this.logsUrl, body);
   }
 
   async exportSpans(spans: ReadableSpan[]): Promise<void> {
     if (!this.enableTraces || spans.length === 0) return;
     const body = createExportTraceServiceRequest(spans);
-    await this.send(this.tracesUrl, body);
+    await this.sendWithRetry(this.tracesUrl, body);
+  }
+
+  private async sendWithRetry(url: string, body: unknown): Promise<void> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        await this.send(url, body);
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < this.maxRetries) {
+          await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
+        }
+      }
+    }
+    runWithHookSkipped(() => {
+      // eslint-disable-next-line no-console
+      console.error(`[FlareLog] Flarelog export to ${url} failed after ${this.maxRetries + 1} attempts:`, lastErr);
+    });
+    throw lastErr;
   }
 
   private async send(url: string, body: unknown): Promise<void> {
@@ -83,16 +107,13 @@ export class FlarelogTransport implements Transport {
       });
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        runWithHookSkipped(() => {
-          // eslint-disable-next-line no-console
-          console.error(`[FlareLog] Flarelog export failed: HTTP ${response.status}: ${text}`);
-        });
+        throw new Error(`HTTP ${response.status} from ${url}: ${text}`);
       }
     } catch (err) {
-      runWithHookSkipped(() => {
-        // eslint-disable-next-line no-console
-        console.error(`[FlareLog] Flarelog export to ${url} failed:`, err);
-      });
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(`Request timeout after ${this.timeoutMs}ms`);
+      }
+      throw err;
     } finally {
       clearTimeout(timer);
     }

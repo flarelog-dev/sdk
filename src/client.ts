@@ -15,7 +15,7 @@ import type {
 } from "./types";
 import { shouldLog } from "./levels";
 import { serializeError, getErrorFingerprint } from "./errors";
-import { installConsoleHooks } from "./console";
+import { installConsoleHooks, runWithHookSkipped } from "./console";
 import { DedupTracker } from "./dedup";
 import { buildResource } from "./otel/resource";
 import { detectOtelEnv, detectFlarelogEnv, detectRuntime } from "./otel/env";
@@ -165,7 +165,7 @@ export class FlareLog {
       transports: this.transports,
       debug: config.debug ?? false,
       workerMode: isWorker,
-      maxQueueSize: config.maxBatchSize ?? 100,
+      maxQueueSize: Math.max(1, config.maxBatchSize ?? 100),
       scheduledDelayMillis: config.flushIntervalMs ?? (isWorker ? 0 : 5000),
     });
     this.flushFn = flush;
@@ -516,7 +516,14 @@ export class FlareLog {
         span.setAttribute("flarelog.duration_ms", Date.now() - startTime);
         span.end();
         if (typeof executionCtx.waitUntil === "function") {
-          executionCtx.waitUntil(this.flush());
+          executionCtx.waitUntil(this.flush().catch((err) => {
+            if (this.config.debug) {
+              runWithHookSkipped(() => {
+                // eslint-disable-next-line no-console
+                console.error("[FlareLog] Flush failed in waitUntil:", err);
+              });
+            }
+          }));
         } else {
           await this.flush();
         }
@@ -557,6 +564,7 @@ export class FlareLog {
         throw err;
       } finally {
         span.end();
+        await this.flush();
       }
     });
   }
