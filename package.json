@@ -141,6 +141,9 @@
       "optional": true
     }
   },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.62.0"
+  },
   "devDependencies": {
     "@types/react": "^18.0.0",
     "esbuild": "^0.28.1",
