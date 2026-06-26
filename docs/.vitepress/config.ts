@@ -78,6 +78,7 @@ export default defineConfig({
           items: [
             { text: 'Cloudflare Workers', link: '/platforms/cloudflare-workers' },
             { text: 'Vercel', link: '/platforms/vercel' },
+            { text: 'Lovable', link: '/platforms/lovable' },
           ]
         }
       ],

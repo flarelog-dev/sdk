@@ -125,6 +125,80 @@ describe("tanstackStartMiddleware", () => {
       serverFn({ request: makeRequest(), context: {}, next }),
     ).rejects.toThrow("boom");
   });
+
+  it("flushes the logger after a successful request", async () => {
+    const logger = makeLogger();
+    const flushSpy = vi.spyOn(logger, "flush").mockResolvedValue(undefined);
+
+    const middleware = tanstackStartMiddleware(logger) as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+
+    const next = vi.fn().mockResolvedValue({ status: 200, context: {} });
+    await serverFn({ request: makeRequest(), context: {}, next });
+
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushes the logger after a failed request (before rethrowing)", async () => {
+    const logger = makeLogger();
+    const flushSpy = vi.spyOn(logger, "flush").mockResolvedValue(undefined);
+
+    const middleware = tanstackStartMiddleware(logger) as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+
+    const next = vi.fn().mockRejectedValue(new Error("boom"));
+    await expect(
+      serverFn({ request: makeRequest(), context: {}, next }),
+    ).rejects.toThrow("boom");
+
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a factory function and invokes it per request", async () => {
+    const logger = makeLogger();
+    const factory = vi.fn(() => logger);
+
+    const middleware = tanstackStartMiddleware(factory) as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+
+    const next = vi.fn().mockResolvedValue({ status: 200, context: {} });
+    await serverFn({ request: makeRequest({ "x-trace-id": "t1" }), context: {}, next });
+    await serverFn({ request: makeRequest({ "x-trace-id": "t2" }), context: {}, next });
+
+    // Factory is invoked once per request (lazy-init pattern for Workers).
+    expect(factory).toHaveBeenCalledTimes(2);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("awaits an async factory function", async () => {
+    const logger = makeLogger();
+    const factory = vi.fn(async () => logger);
+
+    const middleware = tanstackStartMiddleware(factory) as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+
+    const next = vi.fn().mockResolvedValue({ status: 200, context: {} });
+    await serverFn({ request: makeRequest(), context: {}, next });
+
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not swallow flush failures on the success path", async () => {
+    const logger = makeLogger();
+    // flush() rejects, but the middleware should swallow it so the response
+    // is still returned. Transport-level errors are surfaced via console.error
+    // inside FlarelogTransport.sendWithRetry; we must not crash the request.
+    vi.spyOn(logger, "flush").mockRejectedValue(new Error("network down"));
+
+    const middleware = tanstackStartMiddleware(logger) as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+
+    const next = vi.fn().mockResolvedValue({ status: 200, context: {} });
+    const result = await serverFn({ request: makeRequest(), context: {}, next });
+
+    expect(result).toEqual({ status: 200, context: {} });
+  });
 });
 
 describe("withTanStackStart (deprecated)", () => {
