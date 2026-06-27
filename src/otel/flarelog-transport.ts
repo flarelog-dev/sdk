@@ -85,11 +85,12 @@ export class FlarelogTransport implements Transport {
         }
       }
     }
+    // Log error but don't throw - prevents breaking the processor chain
     runWithHookSkipped(() => {
       // eslint-disable-next-line no-console
       console.error(`[FlareLog] Flarelog export to ${url} failed after ${this.maxRetries + 1} attempts:`, lastErr);
     });
-    throw lastErr;
+    // Silently return instead of throwing to prevent queue from getting stuck
   }
 
   private async send(url: string, body: unknown): Promise<void> {

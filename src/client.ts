@@ -539,18 +539,22 @@ export class FlareLog {
       } finally {
         span.setAttribute("flarelog.duration_ms", Date.now() - startTime);
         span.end();
+        // Always await flush - critical for telemetry delivery
+        // In Workers, waitUntil extends the lifetime, but we still need to await
+        const flushPromise = this.flush().catch((err) => {
+          // Always log flush errors, not just in debug mode
+          runWithHookSkipped(() => {
+            // eslint-disable-next-line no-console
+            console.error("[FlareLog] Flush failed:", err);
+          });
+        });
+        
         if (typeof executionCtx.waitUntil === "function") {
-          executionCtx.waitUntil(this.flush().catch((err) => {
-            if (this.config.debug) {
-              runWithHookSkipped(() => {
-                // eslint-disable-next-line no-console
-                console.error("[FlareLog] Flush failed in waitUntil:", err);
-              });
-            }
-          }));
-        } else {
-          await this.flush();
+          executionCtx.waitUntil(flushPromise);
         }
+        
+        // Always await the flush to ensure it completes before response returns
+        await flushPromise;
       }
     });
   }

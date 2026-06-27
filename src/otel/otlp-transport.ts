@@ -107,6 +107,7 @@ export class OTLPTransport implements Transport {
       // eslint-disable-next-line no-console
       console.error(`[FlareLog] OTLP export to ${url} failed after ${this.maxRetries + 1} attempts:`, lastErr);
     });
+    // Silently return to prevent breaking the processor chain
   }
 
   private async send(url: string, body: unknown): Promise<void> {
