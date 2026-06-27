@@ -23,14 +23,13 @@ export default defineConfig({
     logo: '/logo.svg',
     
     nav: [
-      { text: 'Getting Started', link: '/getting-started/installation' },
       { text: 'Core API', link: '/core-api/' },
       { text: 'Guides', link: '/guides/browser' },
       { text: 'Platforms', link: '/platforms/cloudflare-workers' },
       { text: 'Frameworks', link: '/frameworks/nextjs' },
       { text: 'OTel Integration', link: '/otel-integration/overview' },
       { 
-        text: 'v2.3.1',
+        text: 'v2.x',
         items: [
           { text: 'Changelog', link: 'https://github.com/flarelog-dev/sdk/releases' },
           { text: 'npm', link: 'https://www.npmjs.com/package/@flarelog/sdk' },
