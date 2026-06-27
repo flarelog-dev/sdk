@@ -4,73 +4,74 @@ Zero-config logging for TanStack Start applications. Automatically capture reque
 
 TanStack Start does **not** expose an `app.use(...)` API. FlareLog integrates via TanStack Start's `createMiddleware()` from `@tanstack/react-start`. Register the middleware globally, per-route, or per server function.
 
-> **Deploying to Lovable / Cloudflare Workers?** Skip to [Lazy logger on Workers / Lovable](#lazy-logger-on-workers-lovable) — the default `process.env` pattern does **not** work on those runtimes because secrets arrive as request-time bindings, not module-level env vars.
+> **Deploying to Lovable / Cloudflare Workers?** The zero-config form below just works — the SDK auto-detects the runtime and reads secrets from the Worker `env` binding. See the [Lovable platform guide](/platforms/lovable) for full setup.
 
 ## Quick Start
 
-### Eager logger — Node.js dev / Vercel
-
-Use this when `process.env.FLARELOG_API_KEY` is reachable at module load.
+### Zero-config — works everywhere (recommended)
 
 ```typescript
 // src/start.ts
 import { createStart } from "@tanstack/react-start";
+import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
+
+export const startInstance = createStart(() => ({
+  requestMiddleware: [tanstackStartMiddleware() as never],
+}));
+```
+
+The SDK auto-detects the runtime and reads `FLARELOG_API_KEY` from:
+
+1. `process.env` — works on Node.js dev, Vercel, and Workers with
+   `nodejs_compat` enabled + plaintext `[vars]`.
+2. The Cloudflare Worker `env` binding on the request event (looked up via
+   `getEvent()` from `vinxi/http`) — works on Cloudflare Workers, including
+   **Lovable preview and production builds**.
+
+It also auto-sets `workerMode: true` on Workers (so logs flush on every event
+instead of waiting for a 5s timer that never fires) and calls
+`logger.flush()` after each request so the Worker doesn't suspend mid-export.
+
+> Deploying to Lovable? See the [Lovable platform guide](/platforms/lovable)
+> for step-by-step setup.
+
+### Eager logger — when you want custom config
+
+```typescript
+import { createStart } from "@tanstack/react-start";
 import { flarelog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 
-const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY! });
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY!, // works on Node/Vercel; on Workers use the factory below
+  sampleRate: 0.1,
+});
 
 export const startInstance = createStart(() => ({
   requestMiddleware: [tanstackStartMiddleware(logger) as never],
 }));
 ```
 
-### Lazy logger on Workers / Lovable
-
-Use this when deploying to **Cloudflare Workers** (including Lovable preview
-builds). On those runtimes secrets are injected as `env` bindings on the
-request event, and `process.env.FLARELOG_API_KEY` is `undefined` at module
-load. The SDK silently falls back to `ConsoleTransport` → nothing ships to
-your dashboard.
-
-The middleware accepts a factory function `() => FlareLog | Promise<FlareLog>`
-that is invoked on every request, so it can read the per-request `env` via
-`getEvent()` from `vinxi/http`:
+### Factory — full custom control (e.g. multi-tenant, custom env source)
 
 ```typescript
-// src/start.ts
 import { createStart } from "@tanstack/react-start";
-import { flarelog, type FlareLog } from "@flarelog/sdk";
+import { flarelog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 import { getEvent } from "vinxi/http";
 
-let _logger: FlareLog | null = null;
-
-function getLogger(): FlareLog {
-  if (_logger) return _logger;
-
-  // The exact shape depends on the adapter version. Log Object.keys() once
-  // to confirm which path your deploy uses.
-  const event = getEvent() as unknown as {
-    cloudflare?: { env?: Record<string, string | undefined> };
-    context?: { cloudflare?: { env?: Record<string, string | undefined> } };
-  };
-  const env =
-    event?.cloudflare?.env ??
-    event?.context?.cloudflare?.env ??
-    process.env; // local dev fallback
-
-  _logger = flarelog({
-    apiKey: env.FLARELOG_API_KEY,
-    environment: env.FLARELOG_ENVIRONMENT ?? "production",
-    release: env.FLARELOG_RELEASE,
-    workerMode: true, // critical: flushes on every event, no timer
-  });
-  return _logger;
-}
-
 export const startInstance = createStart(() => ({
-  requestMiddleware: [tanstackStartMiddleware(getLogger) as never],
+  requestMiddleware: [
+    tanstackStartMiddleware(() => {
+      const event = getEvent() as any;
+      const env = event?.cloudflare?.env ?? process.env;
+      return flarelog({
+        apiKey: env.FLARELOG_API_KEY,
+        workerMode: true,
+        sampleRate: 0.1,
+      });
+    }) as never,
+  ],
 }));
 ```
 
@@ -78,11 +79,6 @@ export const startInstance = createStart(() => ({
 > with `createMiddleware()`. The `as never` cast may be needed depending on
 > your `createStart` type parameters; if your TS setup infers the builder type
 > directly, omit it.
-
-The `flarelog()` factory auto-detects environment, release, and serverName.
-The middleware also calls `await logger.flush()` after each request to
-guarantee delivery on short-lived Workers — see [Flush guarantee](#flush-guarantee)
-below.
 
 ## Installation
 

@@ -86,6 +86,26 @@ export interface FlareLogConfig {
   /** Whether to enable debug logging (OTel diag logger + extra console output). Defaults to false */
   debug?: boolean;
 
+  /**
+   * Warn to `console.warn` when the SDK falls back to `ConsoleTransport`
+   * because no backend is configured (i.e., `FLARELOG_API_KEY` and
+   * `OTEL_EXPORTER_OTLP_ENDPOINT` are both unset AND no explicit `transports`
+   * array was provided).
+   *
+   * This catches the most common deployment bug: the user set an API key in
+   * their platform's dashboard (e.g. Cloudflare Workers, Lovable, Vercel) but
+   * the SDK can't see it from `process.env` at module load, so it silently
+   * falls back to console-only logging and nothing ships to the dashboard.
+   *
+   * - `true` (default): emit a one-time `console.warn` describing the fallback
+   *   and how to fix it.
+   * - `false`: suppress the warning (for users who intentionally want
+   *   console-only logging).
+   *
+   * The warning is emitted at most once per `FlareLog` instance.
+   */
+  warnOnConsoleFallback?: boolean;
+
   /** Default source tag for all logs */
   defaultSource?: string;
 

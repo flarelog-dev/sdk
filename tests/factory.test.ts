@@ -16,6 +16,10 @@ describe("flarelog factory (v2 — OTel-native)", () => {
     delete process.env.FLARELOG_API_KEY;
     delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
     delete process.env.OTEL_EXPORTER_OTLP_HEADERS;
+    // Silence the loud-fallback warning for tests that intentionally
+    // construct loggers with no backend configured. The warning itself is
+    // tested in tests/lovable-symptom.test.ts.
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {

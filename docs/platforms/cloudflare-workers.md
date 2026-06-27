@@ -56,18 +56,18 @@ export default {
 
 ## With Hono Framework
 
+The Hono middleware auto-detects Cloudflare Workers and reads `FLARELOG_API_KEY`
+from `c.env` (the Worker binding) — no need to instantiate the logger manually.
+
 ```typescript
 import { Hono } from "hono";
-import { flarelog } from "@flarelog/sdk";
 import { honoMiddleware } from "@flarelog/sdk/hono";
 
 const app = new Hono();
 
-// Create one logger per request so env bindings are available
-app.use("*", async (c, next) => {
-  const logger = flarelog({ apiKey: c.env.FLARELOG_API_KEY });
-  return honoMiddleware(logger)(c, next);
-});
+// Zero-config: SDK reads FLARELOG_API_KEY from c.env on Workers,
+// or process.env on Node/Bun. Caches the logger across requests.
+app.use("*", honoMiddleware());
 
 app.get("/api/users/:id", async (c) => {
   const log = c.get("logger");
@@ -93,6 +93,21 @@ app.get("/api/users/:id", async (c) => {
 
 export default app;
 ```
+
+For custom config, pass an explicit logger or a factory:
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { honoMiddleware } from "@flarelog/sdk/hono";
+
+// Eager logger (works on Node/Bun; on Workers use the factory form below)
+app.use("*", honoMiddleware(flarelog({ apiKey: process.env.FLARELOG_API_KEY! })));
+
+// Or: factory with access to c.env (e.g. multi-tenant)
+app.use("*", honoMiddleware((c) => flarelog({ apiKey: c.env.TENANT_KEY })));
+```
+
+See the [Hono framework guide](/frameworks/hono) for the full API.
 
 ## With Itty-Router (Dead Simple)
 

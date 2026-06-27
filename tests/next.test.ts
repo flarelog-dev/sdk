@@ -6,6 +6,7 @@ import {
   getLogCalls,
   getTraceCalls,
   mockFetch,
+  wasFetchCalledForUrl,
   attrsToObject,
 } from "./helpers";
 import {
@@ -124,6 +125,9 @@ describe("withFlareLog (Pages Router API routes)", () => {
     );
     expect(completed?.severityText).toBe("INFO");
     expect(attrsToObject(completed?.attributes).traceId).toBe("trace-abc");
+    // Smoke: transport actually fired (catches the "logger built but no
+    // backend configured" silent-fallback bug — see tests/lovable-symptom.test.ts).
+    expect(wasFetchCalledForUrl(fetchMock, "/v1/logs")).toBe(true);
   });
 
   it("falls back to W3C traceparent when x-trace-id is absent", async () => {
@@ -283,6 +287,8 @@ describe("withNextRouteHandler (App Router)", () => {
     expect(attrs["http.request.method"]).toBe("GET");
     expect(attrs["url.path"]).toBe("/api/test");
     expect(attrs["http.response.status_code"]).toBe(200);
+    // Smoke: transport actually fired (see tests/lovable-symptom.test.ts).
+    expect(wasFetchCalledForUrl(fetchMock, "/v1/traces")).toBe(true);
   });
 
   it("extracts W3C traceparent", async () => {
@@ -338,6 +344,8 @@ describe("withNextMiddleware (Edge Middleware)", () => {
     const spans = getLastSpans(fetchMock);
     expect(spans.length).toBeGreaterThanOrEqual(1);
     expect(spans.some((s) => s.name === "GET /api/test")).toBe(true);
+    // Smoke: transport actually fired (see tests/lovable-symptom.test.ts).
+    expect(wasFetchCalledForUrl(fetchMock, "/v1/traces")).toBe(true);
   });
 
   it("logs errors and rethrows on handler error", async () => {
