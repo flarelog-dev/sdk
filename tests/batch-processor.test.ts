@@ -115,21 +115,23 @@ describe("Batch processor edge cases — timer flushes, queue overflow, shutdown
       logger.destroy();
     });
 
-    it("CRITICAL: worker mode must NOT use timer-based flush", async () => {
+    it("CRITICAL: worker mode must batch logs and flush at request end", async () => {
       const logger = new FlareLog({
         apiKey: "fl_test_key",
-        workerMode: true, // Worker — uses SimpleLogProcessor (immediate)
-        flushIntervalMs: 50, // This should be ignored in worker mode
+        workerMode: true, // Worker — uses BatchLogProcessor with small queue
+        flushIntervalMs: 0, // No timer
       });
 
-      logger.info("worker immediate");
+      logger.info("worker batch 1");
+      logger.info("worker batch 2");
 
-      // In worker mode, flush should happen almost immediately (Simple processor)
-      // Not exactly synchronous due to async, but very fast
-      await wait(20);
+      // In worker mode, logs are queued (not sent immediately)
+      expect(getFetchCallCount(fetchMock)).toBe(0);
 
-      // Should have been sent already (Simple processor sends immediately)
-      // Note: Simple processor sends on each log, so this should be > 0
+      // Manual flush simulates request end
+      await logger.flush();
+
+      // Now logs should be sent in a batch
       expect(getFetchCallCount(fetchMock)).toBeGreaterThan(0);
 
       logger.destroy();
@@ -215,25 +217,32 @@ describe("Batch processor edge cases — timer flushes, queue overflow, shutdown
       logger.destroy();
     });
 
-    it("CRITICAL: worker mode must flush every single log immediately (batchSize=1)", async () => {
+    it("CRITICAL: worker mode must batch logs and flush at request end", async () => {
       const logger = new FlareLog({
         apiKey: "fl_test_key",
         workerMode: true,
       });
 
-      // In worker mode, SimpleLogProcessor sends each log immediately
-      logger.info("immediate 1");
-      await wait(10);
-
-      logger.info("immediate 2");
-      await wait(10);
-
-      logger.info("immediate 3");
-      await wait(10);
-
-      // Each log should trigger its own fetch
+      // In worker mode, BatchLogProcessor queues logs
+      logger.info("batch 1");
+      logger.info("batch 2");
+      logger.info("batch 3");
+      
+      // Not flushed yet (queue not full, no timer)
+      expect(getFetchCallCount(fetchMock)).toBe(0);
+      
+      // Flush manually (simulating request end)
+      await logger.flush();
+      
+      // All logs should be in one batch
       const calls = getFetchCallCount(fetchMock);
-      expect(calls).toBeGreaterThanOrEqual(3);
+      expect(calls).toBe(1);
+      
+      const logs = getLogCalls(fetchMock);
+      expect(logs.length).toBe(1);
+      
+      const allLogs = extractOtlpLogs(logs[0]);
+      expect(allLogs.length).toBe(3);
 
       logger.destroy();
     });
@@ -443,16 +452,20 @@ describe("Batch processor edge cases — timer flushes, queue overflow, shutdown
   // =========================================================================
 
   describe("Worker vs non-worker mode differences", () => {
-    it("workerMode: true uses Simple processors (immediate, no timer)", async () => {
+    it("workerMode: true uses Batch processors with small queue (no timer)", async () => {
       const logger = new FlareLog({
         apiKey: "fl_test_key",
         workerMode: true,
       });
 
-      logger.info("worker");
-      await wait(10);
-
-      // Should have been sent immediately by SimpleLogProcessor
+      logger.info("worker batch 1");
+      logger.info("worker batch 2");
+      
+      // Should NOT be sent immediately (batched)
+      expect(getFetchCallCount(fetchMock)).toBe(0);
+      
+      // Flush sends the batch
+      await logger.flush();
       expect(getFetchCallCount(fetchMock)).toBeGreaterThan(0);
 
       logger.destroy();
@@ -478,17 +491,23 @@ describe("Batch processor edge cases — timer flushes, queue overflow, shutdown
       logger.destroy();
     });
 
-    it("CRITICAL: workerMode: true must use Simple processors (immediate flush)", async () => {
-      // Explicit worker mode should always use Simple processors
+    it("CRITICAL: workerMode: true must use Batch processors (flush at request end)", async () => {
+      // Worker mode should batch logs and flush at request end
       const logger = new FlareLog({
         apiKey: "fl_test_key",
         workerMode: true, // Explicitly set
       });
 
-      logger.info("explicit worker");
-      await wait(20);
+      logger.info("explicit worker 1");
+      logger.info("explicit worker 2");
+      
+      // Should be queued, not sent immediately
+      expect(getFetchCallCount(fetchMock)).toBe(0);
+      
+      // Flush at request end sends the batch
+      await logger.flush();
 
-      // Should use Simple processor, so logs sent quickly
+      // Should use Batch processor, so logs sent in one request
       expect(getFetchCallCount(fetchMock)).toBeGreaterThan(0);
 
       logger.destroy();
