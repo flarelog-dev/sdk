@@ -31,10 +31,10 @@
   --vp-c-accent-soft: rgba(249, 115, 22, 0.14);
 
   /* Code Colors */
-  --vp-code-bg: #18181b;
-  --vp-code-color: #d4d4d8;
-  --vp-code-block-bg: #09090b;
-  --vp-code-block-color: #d4d4d8;
+  --vp-code-bg: #1c1c1e;
+  --vp-code-color: #fb923c;
+  --vp-code-block-bg: #111113;
+  --vp-code-block-color: #e4e4e7;
   --vp-code-block-divider-color: #27272a;
 
   /* Custom Block Colors */
@@ -162,18 +162,64 @@
   border-radius: 0;
 }
 
-/* Code Blocks */
+/* ─── Inline Code ────────────────────────────────────────────────────────── */
+/* Orange on dark bg — stands out without screaming */
+.vp-doc :not(pre) > code {
+  background: #1c1c1e;
+  color: #fb923c;
+  border: 1px solid #3f3f46;
+  border-radius: 0;
+  padding: 0.2em 0.45em;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875em;
+}
+
+/* ─── Code Blocks ────────────────────────────────────────────────────────── */
 .vp-doc div[class*='language-'] {
   border-radius: 0;
   border: 2px solid #27272a;
-  background: #09090b;
+  background: #111113;
 }
 
+/* Fallback base token color for anything Shiki doesn't explicitly color */
 .vp-doc div[class*='language-'] code {
   font-family: 'JetBrains Mono', monospace;
+  color: #e4e4e7;
 }
 
-/* Tables */
+/* ─── Line Numbers ───────────────────────────────────────────────────────── */
+.vp-doc div[class*='language-'].line-numbers-mode .line-numbers-wrapper {
+  background: #111113;
+  color: #52525b;
+  border-right: 1px solid #27272a;
+}
+
+/* Highlighted lines */
+.vp-doc div[class*='language-'] .highlighted {
+  background: rgba(249, 115, 22, 0.08);
+  border-left: 2px solid #f97316;
+}
+
+/* ─── Code Block Header (lang label + copy button) ──────────────────────── */
+.vp-doc div[class*='language-'] > span.lang {
+  color: #52525b;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vp-doc div[class*='language-'] > button.copy {
+  color: #52525b;
+  border-radius: 0;
+}
+
+.vp-doc div[class*='language-'] > button.copy:hover {
+  color: #fb923c;
+  background: rgba(249, 115, 22, 0.08);
+}
+
+/* ─── Tables ─────────────────────────────────────────────────────────────── */
 .vp-doc table {
   border-collapse: collapse;
   width: 100%;
@@ -203,7 +249,7 @@
   background: rgba(39, 39, 42, 0.3);
 }
 
-/* Links */
+/* ─── Links ──────────────────────────────────────────────────────────────── */
 .vp-doc a {
   color: #fb923c;
   text-decoration: none;
@@ -215,7 +261,7 @@
   color: #f97316;
 }
 
-/* Navigation */
+/* ─── Navigation ─────────────────────────────────────────────────────────── */
 .VPNav {
   background: rgba(9, 9, 11, 0.95) !important;
   backdrop-filter: blur(12px);
@@ -229,7 +275,7 @@
   letter-spacing: 0.05em;
 }
 
-/* Sidebar */
+/* ─── Sidebar ────────────────────────────────────────────────────────────── */
 .VPSidebar {
   background: #09090b !important;
   border-right: 2px solid #27272a;
@@ -255,13 +301,13 @@
   color: #f97316;
 }
 
-/* Search */
+/* ─── Search ─────────────────────────────────────────────────────────────── */
 .VPLocalSearchBox {
   background: #18181b !important;
   border: 2px solid #27272a;
 }
 
-/* Buttons */
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
 .VPButton {
   border-radius: 0 !important;
   font-family: 'JetBrains Mono', monospace;
@@ -293,19 +339,19 @@
   color: #fb923c !important;
 }
 
-/* Footer */
+/* ─── Footer ─────────────────────────────────────────────────────────────── */
 .VPFooter {
   background: #09090b;
   border-top: 2px solid #27272a;
 }
 
-/* Outline (Right Sidebar) */
+/* ─── Outline (Right Sidebar) ────────────────────────────────────────────── */
 .VPDocOutlineItem {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
 }
 
-/* Content Typography */
+/* ─── Content Typography ─────────────────────────────────────────────────── */
 .vp-doc h1,
 .vp-doc h2,
 .vp-doc h3,
@@ -327,7 +373,7 @@
   padding-bottom: 0.3rem;
 }
 
-/* Custom Block Styling */
+/* ─── Custom Blocks ──────────────────────────────────────────────────────── */
 .vp-doc .custom-block {
   border-radius: 0;
   border: 2px solid;
@@ -348,7 +394,7 @@
   border-color: #f87171;
 }
 
-/* Mobile Menu */
+/* ─── Mobile Menu ────────────────────────────────────────────────────────── */
 .VPNavScreen {
   background: #09090b;
 }

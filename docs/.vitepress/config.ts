@@ -6,7 +6,7 @@ export default defineConfig({
   base: '/',
   cleanUrls: true,
   lastUpdated: true,
-  
+
   head: [
     ['link', { rel: 'icon', href: '/favicon.ico' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
@@ -21,14 +21,14 @@ export default defineConfig({
 
   themeConfig: {
     logo: '/logo.svg',
-    
+
     nav: [
       { text: 'Core API', link: '/core-api/' },
       { text: 'Guides', link: '/guides/browser' },
       { text: 'Platforms', link: '/platforms/cloudflare-workers' },
       { text: 'Frameworks', link: '/frameworks/nextjs' },
       { text: 'OTel Integration', link: '/otel-integration/overview' },
-      { 
+      {
         text: 'v2.x',
         items: [
           { text: 'Changelog', link: 'https://github.com/flarelog-dev/sdk/releases' },
@@ -129,6 +129,10 @@ export default defineConfig({
 
   markdown: {
     lineNumbers: true,
+    theme: {
+      dark: 'vitesse-dark',
+      light: 'vitesse-dark', // keep dark theme even in light mode to match your dark-only design
+    },
   },
 
   vite: {
