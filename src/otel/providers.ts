@@ -30,13 +30,23 @@ class TransportLogExporter implements LogRecordExporter {
 
 class SimpleSpanProcessor {
   private exporter: TransportSpanExporter;
+  private inFlight: Promise<void>[] = [];
   constructor(transport: Transport) {
     this.exporter = new TransportSpanExporter(transport);
   }
   async onEnd(span: ReadableSpan): Promise<void> {
-    await this.exporter.export([span]);
+    const promise = this.exporter.export([span]);
+    this.inFlight.push(promise);
+    promise.finally(() => {
+      const idx = this.inFlight.indexOf(promise);
+      if (idx !== -1) this.inFlight.splice(idx, 1);
+    });
+    await promise;
   }
-  async forceFlush(): Promise<void> { await this.exporter.forceFlush(); }
+  async forceFlush(): Promise<void> { 
+    await Promise.all(this.inFlight);
+    await this.exporter.forceFlush(); 
+  }
   async shutdown(): Promise<void> { await this.exporter.shutdown(); }
 }
 
@@ -128,13 +138,23 @@ class BatchSpanProcessor {
 
 class SimpleLogProcessor {
   private exporter: TransportLogExporter;
+  private inFlight: Promise<void>[] = [];
   constructor(transport: Transport) {
     this.exporter = new TransportLogExporter(transport);
   }
   async onEmit(log: ReadableLogRecord): Promise<void> {
-    await this.exporter.export([log]);
+    const promise = this.exporter.export([log]);
+    this.inFlight.push(promise);
+    promise.finally(() => {
+      const idx = this.inFlight.indexOf(promise);
+      if (idx !== -1) this.inFlight.splice(idx, 1);
+    });
+    await promise;
   }
-  async forceFlush(): Promise<void> { await this.exporter.forceFlush(); }
+  async forceFlush(): Promise<void> { 
+    await Promise.all(this.inFlight);
+    await this.exporter.forceFlush(); 
+  }
   async shutdown(): Promise<void> { await this.exporter.shutdown(); }
 }
 
