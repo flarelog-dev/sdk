@@ -310,21 +310,20 @@ export function initProviders(opts: ProviderOptions): {
   const logProcessors: Array<SimpleLogProcessor | BatchLogProcessor> = [];
 
   for (const transport of opts.transports) {
-    if (isWorker) {
-      spanProcessors.push(new SimpleSpanProcessor(transport));
-      logProcessors.push(new SimpleLogProcessor(transport));
-    } else {
-      spanProcessors.push(new BatchSpanProcessor(transport, {
-        maxQueueSize: opts.maxQueueSize ?? 100,
-        scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
-        debug: opts.debug,
-      }));
-      logProcessors.push(new BatchLogProcessor(transport, {
-        maxQueueSize: opts.maxQueueSize ?? 100,
-        scheduledDelayMillis: opts.scheduledDelayMillis ?? 5000,
-        debug: opts.debug,
-      }));
-    }
+    // Use batching for both workers and non-workers
+    // Workers: small batch size, no timer (flush at request end)
+    // Non-workers: larger batch size, timer-based flush
+    const maxQueueSize = isWorker ? 10 : (opts.maxQueueSize ?? 100);
+    const scheduledDelayMillis = isWorker ? 0 : (opts.scheduledDelayMillis ?? 5000);
+    
+    spanProcessors.push(new BatchSpanProcessor(transport, {
+      maxQueueSize,
+      scheduledDelayMillis,
+    }));
+    logProcessors.push(new BatchLogProcessor(transport, {
+      maxQueueSize,
+      scheduledDelayMillis,
+    }));
   }
 
   const onSpanEnd = (span: ReadableSpan) => {
