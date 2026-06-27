@@ -6,74 +6,41 @@ new Lovable project uses this stack by default — see Lovable's
 [Building apps using TanStack Start](https://lovable.dev/blog/building-apps-using-tanstack-start)
 announcement for the full architecture.
 
-This matters for FlareLog because the runtime determines how secrets reach
-your code. On Workers, `process.env.FLARELOG_API_KEY` is **undefined** at
-module load. Secrets are injected as `env` bindings on the request event.
-If you instantiate the logger eagerly with `flarelog({ apiKey:
-process.env.FLARELOG_API_KEY! })`, the SDK silently falls back to
-`ConsoleTransport` and nothing ships to your dashboard.
-
-This guide shows the correct pattern for Lovable preview and production
-builds.
-
 ## TL;DR
 
 ```typescript
 // src/start.ts
 import { createStart } from "@tanstack/react-start";
-import { flarelog, type FlareLog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
-import { getEvent } from "vinxi/http";
-
-let _logger: FlareLog | null = null;
-
-function getLogger(): FlareLog {
-  if (_logger) return _logger;
-
-  const event = getEvent() as unknown as {
-    cloudflare?: { env?: Record<string, string | undefined> };
-    context?: { cloudflare?: { env?: Record<string, string | undefined> } };
-  };
-  const env =
-    event?.cloudflare?.env ??
-    event?.context?.cloudflare?.env ??
-    process.env; // local dev fallback
-
-  _logger = flarelog({
-    apiKey: env.FLARELOG_API_KEY,
-    environment: env.FLARELOG_ENVIRONMENT ?? "production",
-    release: env.FLARELOG_RELEASE,
-    workerMode: true, // critical: batchSize=1, flushIntervalMs=0
-  });
-  return _logger;
-}
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [tanstackStartMiddleware(getLogger) as never],
+  requestMiddleware: [tanstackStartMiddleware() as never],
 }));
 ```
 
-## Why the lazy pattern is required
+That's it. The SDK auto-detects Cloudflare Workers, reads `FLARELOG_API_KEY`
+from the Worker `env` binding (not `process.env`, which is empty on Workers),
+forces `workerMode: true` so logs flush on every event, and calls
+`logger.flush()` after each request so the Worker doesn't suspend mid-export.
 
-Lovable's new stack runs your app as a single Cloudflare Worker. The runtime
-characteristics are:
+## Why this needs special handling
+
+Lovable's new stack runs your app as a single Cloudflare Worker. Two runtime
+characteristics matter:
 
 1. **Secrets are bindings, not env vars.** Lovable stores your `FLARELOG_API_KEY`
    in its dashboard and injects it as a Worker binding at request time. It is
-   **not** present on `process.env` at module load.
+   **not** present on `process.env` at module load. The SDK works around this
+   by reading the binding off the request event via `getEvent()` from
+   `vinxi/http` — automatically, on the first request.
 2. **The Worker is short-lived.** Without `workerMode: true`, the SDK uses the
    default Node-style batch processor (`batchSize: 50`, `flushIntervalMs: 5000`).
    The Worker will be suspended before the timer fires, dropping all buffered
-   logs.
-3. **No `ctx.waitUntil` from the middleware layer.** TanStack Start's
-   `createMiddleware().server(...)` does not expose the Worker's
-   `ExecutionContext`. The middleware instead calls `await logger.flush()`
-   after each request to force delivery before the Worker returns.
+   logs. The middleware calls `await logger.flush()` after each request to
+   force delivery before the Worker returns.
 
-The factory pattern solves (1) by deferring logger creation until the request
-arrives, at which point `getEvent()` from `vinxi/http` can read the per-request
-`env`. Setting `workerMode: true` solves (2). The flush call inside
-`tanstackStartMiddleware` solves (3).
+You don't have to think about either of these — `tanstackStartMiddleware()`
+with no arguments handles both.
 
 ## Step-by-step setup
 
@@ -103,40 +70,19 @@ the client bundle, which leaks your key to the browser. Server-only secrets
 (without the prefix) are injected as Worker bindings and never reach the
 client.
 
-### 3. Create `src/start.ts`
+### 3. Create or update `src/start.ts`
 
 Use the TL;DR snippet above. If `src/start.ts` already exists (Lovable
 generates one with CSRF middleware), merge the two:
 
 ```typescript
 import { createStart, createCsrfMiddleware } from "@tanstack/react-start";
-import { flarelog, type FlareLog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
-import { getEvent } from "vinxi/http";
-
-let _logger: FlareLog | null = null;
-function getLogger(): FlareLog {
-  if (_logger) return _logger;
-  const event = getEvent() as unknown as {
-    cloudflare?: { env?: Record<string, string | undefined> };
-    context?: { cloudflare?: { env?: Record<string, string | undefined> } };
-  };
-  const env =
-    event?.cloudflare?.env ??
-    event?.context?.cloudflare?.env ??
-    process.env;
-  _logger = flarelog({
-    apiKey: env.FLARELOG_API_KEY,
-    environment: env.FLARELOG_ENVIRONMENT ?? "production",
-    workerMode: true,
-  });
-  return _logger;
-}
 
 export const startInstance = createStart(() => ({
   requestMiddleware: [
     createCsrfMiddleware(),
-    tanstackStartMiddleware(getLogger) as never,
+    tanstackStartMiddleware() as never,
   ],
 }));
 ```
@@ -151,7 +97,6 @@ import { createServerFn } from "@tanstack/react-start";
 
 export const getUser = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
-    // context.logger is the FlareLog child created by tanstackStartMiddleware
     context.logger.info("getUser called", { userId: 42 });
     return { id: 42, name: "Ada" };
   });
@@ -166,42 +111,67 @@ Click **Publish** in Lovable. Once the deploy completes:
 2. Open your FlareLog dashboard. Within a few seconds you should see the
    "Request completed" log with `source: tanstack-start`, the `traceId`, the
    HTTP method, and the duration.
-3. If nothing appears, enable `debug: true` in the `flarelog({...})` call.
-   The SDK will print transport resolution to the console. In Lovable's
-   editor, the Worker stdout is surfaced in the **Logs** tab.
+
+## Customizing the logger
+
+If you need to override the defaults (sample rate, custom beforeSend, extra
+transports, etc.), pass an explicit logger or a factory:
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
+
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY!, // works in dev; on Workers use the factory below
+  sampleRate: 0.1,
+});
+
+// or — lazy factory for full control on Workers:
+const middleware = tanstackStartMiddleware(() => flarelog({ sampleRate: 0.1 }));
+```
+
+See the [TanStack Start framework guide](/frameworks/tanstack-start) for the
+full middleware API reference.
 
 ## Troubleshooting
 
 ### Nothing shows up in the dashboard
 
 The most common cause is the API key not reaching the SDK. Add `debug: true`
-to the `flarelog({...})` call and check the resolved transports:
+to a custom logger and check the resolved transports:
 
 ```typescript
-_logger = flarelog({
-  apiKey: env.FLARELOG_API_KEY,
-  workerMode: true,
-  debug: true,
-});
+tanstackStartMiddleware(() => flarelog({ debug: true }))
 ```
 
 If you see only `ConsoleTransport` in the debug output, the `env` lookup
-failed. Log `Object.keys(event?.cloudflare?.env ?? {})` once on the first
-request to confirm the binding name and shape. Different versions of the
-Cloudflare adapter expose it at different paths — the factory pattern above
-tries the two most common shapes and falls back to `process.env` for local
-dev.
+failed. The auto-mode tries `event.cloudflare.env` and
+`event.context.cloudflare.env`; if your adapter uses a different shape, log
+`Object.keys(getEvent() ?? {})` once on the first request to find the right
+path, then use the factory form:
+
+```typescript
+import { getEvent } from "vinxi/http";
+import { flarelog } from "@flarelog/sdk";
+import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
+
+tanstackStartMiddleware(() => {
+  const event = getEvent() as any;
+  return flarelog({ apiKey: event?.myAdapter?.env?.FLARELOG_API_KEY });
+})
+```
 
 ### Logs appear in dev but not in preview
 
-This is the classic symptom that prompted this guide. Dev runs on Node with
+This was the original symptom that motivated this guide. Dev runs on Node with
 `.env` loaded, so `process.env.FLARELOG_API_KEY` works. Preview runs on
-Workers where it does not. Switch to the lazy factory pattern.
+Workers where it does not. Use the zero-arg `tanstackStartMiddleware()` form,
+which handles both runtimes.
 
 ### Logs appear in preview but not in production
 
 Same cause. Both Lovable preview and production run on Cloudflare Workers;
-the same factory pattern fixes both.
+the zero-arg middleware fixes both.
 
 ### Traces are missing but logs work
 
@@ -227,9 +197,8 @@ failed flush prints this message once.
 ## See also
 
 - [TanStack Start framework guide](/frameworks/tanstack-start) — full
-  middleware API reference.
+  middleware API reference, custom logger patterns, per-route middleware.
 - [Cloudflare Workers platform guide](/platforms/cloudflare-workers) — the
-  underlying runtime. The `workerFetch()` and `withRequest()` patterns shown
-  there are for raw Workers; with TanStack Start you use the middleware
-  instead, but the same `workerMode: true` and flush-on-completion rules
-  apply.
+  underlying runtime. Same `workerMode: true` and flush-on-completion rules
+  apply, but for raw Workers you use `workerFetch()` instead of the TanStack
+  Start middleware.

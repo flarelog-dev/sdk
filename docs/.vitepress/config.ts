@@ -88,6 +88,7 @@ export default defineConfig({
           items: [
             { text: 'Next.js', link: '/frameworks/nextjs' },
             { text: 'TanStack Start', link: '/frameworks/tanstack-start' },
+            { text: 'Hono', link: '/frameworks/hono' },
           ]
         }
       ],

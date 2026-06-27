@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FlareLog } from "../src/client";
-import { mockFetch } from "./helpers";
+import { mockFetch, wasFetchCalledForUrl } from "./helpers";
 
 // Mock @tanstack/react-start (an optional peer dep not installed in this repo).
 // The mock captures the `.server(fn)` callback so tests can invoke it directly
@@ -27,9 +27,19 @@ vi.mock("@tanstack/react-start", () => {
   };
 });
 
+// Mock vinxi/http so the auto-logger can find a Worker env binding in tests.
+// Each test can override `__currentEvent` to simulate different request events.
+let __currentEvent: unknown = null;
+vi.mock("vinxi/http", () => ({
+  getEvent: () => __currentEvent,
+}));
+
 import {
   tanstackStartMiddleware,
   withTanStackStart,
+  autoLogger,
+  resolveWorkerEnv,
+  __resetAutoLoggerCache,
 } from "../src/frameworks/tanstack-start";
 
 interface BuilderStub {
@@ -58,6 +68,8 @@ describe("tanstackStartMiddleware", () => {
   beforeEach(() => {
     fetchMock = mockFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
+    __currentEvent = null;
+    __resetAutoLoggerCache();
   });
 
   afterEach(() => {
@@ -198,6 +210,94 @@ describe("tanstackStartMiddleware", () => {
     const result = await serverFn({ request: makeRequest(), context: {}, next });
 
     expect(result).toEqual({ status: 200, context: {} });
+  });
+});
+
+describe("tanstackStartMiddleware — zero-arg auto mode", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = mockFetch();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    __currentEvent = null;
+    __resetAutoLoggerCache();
+    // Ensure process.env doesn't leak FLARELOG_API_KEY into auto-mode tests
+    delete process.env.FLARELOG_API_KEY;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("auto-creates a logger from the Worker env binding on the request event", async () => {
+    // Simulate a Cloudflare Worker request event with env bindings.
+    __currentEvent = {
+      cloudflare: {
+        env: { FLARELOG_API_KEY: "fl_from_binding" },
+      },
+    };
+
+    const middleware = tanstackStartMiddleware() as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+    const next = vi.fn().mockResolvedValue({ status: 200, context: {} });
+
+    await serverFn({ request: makeRequest(), context: {}, next });
+
+    // The auto-logger should have resolved the API key from the binding and
+    // shipped the log to the Flarelog transport (URL ends in /v1/logs).
+    expect(wasFetchCalledForUrl(fetchMock, "/v1/logs")).toBe(true);
+  });
+
+  it("falls back to process.env when no Worker binding is present", async () => {
+    process.env.FLARELOG_API_KEY = "fl_from_process_env";
+
+    const middleware = tanstackStartMiddleware() as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+    const next = vi.fn().mockResolvedValue({ status: 200, context: {} });
+
+    await serverFn({ request: makeRequest(), context: {}, next });
+
+    expect(wasFetchCalledForUrl(fetchMock, "/v1/logs")).toBe(true);
+
+    delete process.env.FLARELOG_API_KEY;
+  });
+
+  it("caches the auto-logger across requests within the same middleware instance", async () => {
+    __currentEvent = {
+      cloudflare: { env: { FLARELOG_API_KEY: "fl_cached" } },
+    };
+
+    const middleware = tanstackStartMiddleware() as unknown as BuilderStub;
+    const serverFn = middleware._serverFn!;
+    const next = vi.fn().mockResolvedValue({ status: 200, context: {} });
+
+    await serverFn({ request: makeRequest({ "x-trace-id": "t1" }), context: {}, next });
+    await serverFn({ request: makeRequest({ "x-trace-id": "t2" }), context: {}, next });
+
+    // Both requests should flow through; the cache prevents re-instantiating
+    // the logger on every request, which would re-import vinxi/http each time.
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("resolveWorkerEnv returns null when no env source is available", async () => {
+    __currentEvent = null;
+    __resetAutoLoggerCache();
+    delete process.env.FLARELOG_API_KEY;
+    expect(await resolveWorkerEnv()).toBeNull();
+  });
+
+  it("resolveWorkerEnv reads from event.cloudflare.env", async () => {
+    __currentEvent = { cloudflare: { env: { FLARELOG_API_KEY: "x" } } };
+    __resetAutoLoggerCache();
+    const env = await resolveWorkerEnv();
+    expect(env?.FLARELOG_API_KEY).toBe("x");
+  });
+
+  it("resolveWorkerEnv reads from event.context.cloudflare.env (older adapter shape)", async () => {
+    __currentEvent = { context: { cloudflare: { env: { FLARELOG_API_KEY: "y" } } } };
+    __resetAutoLoggerCache();
+    const env = await resolveWorkerEnv();
+    expect(env?.FLARELOG_API_KEY).toBe("y");
   });
 });
 

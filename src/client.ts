@@ -284,6 +284,30 @@ export class FlareLog {
 
     // 3. Console fallback — if nothing else is configured
     if (transports.length === 0) {
+      // Warn loudly (unless explicitly silenced). This catches the most common
+      // deployment bug: user set FLARELOG_API_KEY in their platform's dashboard
+      // (Cloudflare Workers, Lovable, Vercel) but the SDK can't see it at
+      // module load because process.env is empty on those runtimes.
+      // Without this warning, the SDK silently falls back to console-only and
+      // the user's dashboard stays empty — they conclude the SDK is broken.
+      if (config.warnOnConsoleFallback !== false) {
+        // Use runWithHookSkipped so the warning isn't itself captured as a log
+        // by the console hooks we may install below (otherwise we'd ship the
+        // warning back to the console transport, creating a feedback loop).
+        runWithHookSkipped(() => {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[FlareLog] No backend configured — falling back to console-only logging. " +
+              "Logs will NOT ship to a dashboard. To fix:\n" +
+              "  • Cloudflare Workers / Lovable: secrets arrive as `env` bindings, not `process.env`. " +
+              "Use `tanstackStartMiddleware()` / `honoMiddleware()` with no args, or pass `env` explicitly.\n" +
+              "  • Node / Vercel: set FLARELOG_API_KEY in process.env before importing the SDK.\n" +
+              "  • Any runtime: pass `apiKey` explicitly: `flarelog({ apiKey: 'fl_...' })`.\n" +
+              "  • Or set OTEL_EXPORTER_OTLP_ENDPOINT to ship to any OTLP backend.\n" +
+              "To silence this warning: `flarelog({ warnOnConsoleFallback: false })`.",
+          );
+        });
+      }
       transports.push(new ConsoleTransport());
     }
 

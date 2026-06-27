@@ -1,5 +1,13 @@
 import type { FlareLog, FlareLogChild } from "../client";
+import {
+  autoLogger,
+  __resetAutoLoggerCache,
+  resolveWorkerEnv,
+} from "./auto-logger";
 import { createMiddleware } from "@tanstack/react-start";
+
+// Re-export so existing imports from `@flarelog/sdk/tanstack-start` still work.
+export { autoLogger, resolveWorkerEnv, __resetAutoLoggerCache };
 
 type RequestLike = {
   method: string;
@@ -43,21 +51,20 @@ function createChildLogger(
 }
 
 /**
- * Logger input accepted by `tanstackStartMiddleware`.
+ * Logger input accepted by {@link tanstackStartMiddleware}.
  *
- * - A {@link FlareLog} instance: the classic, eager-init pattern. Use this when
- *   `process.env.FLARELOG_API_KEY` is reachable at module load (Node.js dev,
- *   Node.js production, Vercel, etc.).
- * - A factory `() => FlareLog | Promise<FlareLog>`: lazy-init pattern. Use this
- *   when the API key is only available inside the request handler — e.g. on
- *   Cloudflare Workers (including Lovable preview builds), where secrets arrive
- *   as Worker `env` bindings and `process.env` is `undefined`. The factory is
- *   invoked on every request, so it can read the per-request `env` via
- *   `getEvent()` from `vinxi/http`.
+ * - `undefined` (or omitted): the SDK auto-creates a logger by detecting the
+ *   runtime and reading secrets from `process.env` (Node/Vercel) or the
+ *   Worker `env` binding (Cloudflare Workers / Lovable). This is the
+ *   recommended form for new projects — see the example in the JSDoc below.
+ * - A {@link FlareLog} instance: the classic eager-init pattern. Use this
+ *   when you've already constructed a logger with custom config.
+ * - A factory `() => FlareLog | Promise<FlareLog>`: for full custom control.
  */
 export type TanstackStartLoggerInput =
   | FlareLog
-  | (() => FlareLog | Promise<FlareLog>);
+  | (() => FlareLog | Promise<FlareLog>)
+  | undefined;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
@@ -66,7 +73,7 @@ export type TanstackStartLoggerInput =
  *
  * Composes with TanStack Start's real `createMiddleware()` from
  * `@tanstack/react-start`. Register it globally in `src/start.ts` via
- * `createStart(() => ({ requestMiddleware: [tanstackStartMiddleware(logger)] }))`,
+ * `createStart(() => ({ requestMiddleware: [tanstackStartMiddleware()] }))`,
  * per-route via `createFileRoute(...)({ server: { middleware: [...] } })`, or
  * per server function via `createServerFn().middleware([...])`.
  *
@@ -85,64 +92,54 @@ export type TanstackStartLoggerInput =
  * Note: TanStack Start does not expose a response status reader from within
  * request middleware (only setters like `setResponseStatus`). When `next()`
  * returns a result carrying a numeric `status` field it is used for level
- * mapping; otherwise completion is logged at INFO.
+ * mapping; otherwise completion logs at INFO.
  *
- * @example Eager logger — Node.js dev / Vercel
+ * @example Zero-config — works on Node, Vercel, Cloudflare Workers, Lovable
  * ```typescript
  * // src/start.ts
  * import { createStart } from "@tanstack/react-start";
- * import { flarelog } from "@flarelog/sdk";
  * import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
  *
- * const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY! });
- *
  * export const startInstance = createStart(() => ({
- *   requestMiddleware: [tanstackStartMiddleware(logger)],
+ *   requestMiddleware: [tanstackStartMiddleware() as never],
  * }));
  * ```
+ * The SDK auto-detects the runtime and reads `FLARELOG_API_KEY` from
+ * `process.env` (Node/Vercel) or the Worker `env` binding (Workers/Lovable).
  *
- * @example Lazy logger — Cloudflare Workers / Lovable preview
+ * @example Eager logger — when you want custom config
  * ```typescript
- * // src/start.ts
- * import { createStart } from "@tanstack/react-start";
- * import { flarelog, type FlareLog } from "@flarelog/sdk";
- * import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
- * import { getEvent } from "vinxi/http";
+ * import { flarelog } from "@flarelog/sdk";
+ * const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY!, sampleRate: 0.1 });
+ * // ...
+ * requestMiddleware: [tanstackStartMiddleware(logger) as never],
+ * ```
  *
- * let _logger: FlareLog | null = null;
- * function getLogger(): FlareLog {
- *   if (_logger) return _logger;
- *   // On Lovable/Workers, secrets arrive as bindings on the request event,
- *   // NOT on process.env. Falls back to process.env for local dev.
- *   const event = getEvent() as unknown as {
- *     cloudflare?: { env?: Record<string, string | undefined> };
- *     context?: { cloudflare?: { env?: Record<string, string | undefined> } };
- *   };
- *   const env = event?.cloudflare?.env
- *     ?? event?.context?.cloudflare?.env
- *     ?? process.env;
- *   _logger = flarelog({
- *     apiKey: env.FLARELOG_API_KEY,
- *     environment: env.FLARELOG_ENVIRONMENT ?? "production",
- *     release: env.FLARELOG_RELEASE,
- *     workerMode: true,
- *   });
- *   return _logger;
- * }
- *
- * export const startInstance = createStart(() => ({
- *   requestMiddleware: [tanstackStartMiddleware(getLogger)],
- * }));
+ * @example Factory — full custom control (e.g. multi-tenant)
+ * ```typescript
+ * requestMiddleware: [tanstackStartMiddleware(() => createLoggerForTenant(getTenant())) as never],
  * ```
  */
 export function tanstackStartMiddleware(
-  loggerOrFactory: TanstackStartLoggerInput,
+  loggerOrFactory?: TanstackStartLoggerInput,
 ): unknown {
+  // Cache for the auto-logger mode. The factory is async (it may need to
+  // import vinxi/http and read the request event), so we memoize after the
+  // first request. On Workers, the same isolate handles many requests, so
+  // this avoids re-creating the logger (and re-reading the env) per request.
+  let autoLoggerPromise: Promise<FlareLog> | null = null;
+
   return createMiddleware().server(async ({ next, request }) => {
-    const logger =
-      typeof loggerOrFactory === "function"
-        ? await loggerOrFactory()
-        : loggerOrFactory;
+    let logger: FlareLog;
+    if (loggerOrFactory === undefined) {
+      // Auto mode: create (and cache) the logger lazily on first request.
+      if (!autoLoggerPromise) autoLoggerPromise = autoLogger();
+      logger = await autoLoggerPromise;
+    } else if (typeof loggerOrFactory === "function") {
+      logger = await loggerOrFactory();
+    } else {
+      logger = loggerOrFactory;
+    }
 
     const req = request as unknown as RequestLike;
     const traceId = resolveTraceId(req);
@@ -188,8 +185,8 @@ export function tanstackStartMiddleware(
 /**
  * @deprecated `withTanStackStart` was built against a `app.use`-style API that
  * TanStack Start does not provide. It is retained only to surface a clear
- * migration error. Use `createServerFn().middleware([tanstackStartMiddleware(logger)])`
- * for per-server-function logging, or register `tanstackStartMiddleware`
+ * migration error. Use `createServerFn().middleware([tanstackStartMiddleware()])`
+ * for per-server-function logging, or register `tanstackStartMiddleware()`
  * globally via `createStart` in `src/start.ts`.
  *
  * @throws Always throws on invocation.
@@ -201,7 +198,7 @@ export function withTanStackStart<T>(
   return async () => {
     throw new Error(
       "withTanStackStart is unsupported. TanStack Start has no `app.use` API. " +
-        "Use createServerFn().middleware([tanstackStartMiddleware(logger)]) or " +
+        "Use createServerFn().middleware([tanstackStartMiddleware()]) or " +
         "register tanstackStartMiddleware via createStart({ requestMiddleware: [...] }).",
     );
   };
