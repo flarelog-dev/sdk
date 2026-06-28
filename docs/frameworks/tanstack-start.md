@@ -25,7 +25,7 @@ The SDK auto-detects the runtime and reads `FLARELOG_API_KEY` from:
 1. `process.env` — works on Node.js dev, Vercel, and Workers with
    `nodejs_compat` enabled + plaintext `[vars]`.
 2. The Cloudflare Worker `env` binding on the request event (looked up via
-   `getEvent()` from `vinxi/http`) — works on Cloudflare Workers, including
+   `getRequestEvent()` from `@tanstack/react-start`) — works on Cloudflare Workers, including
    **Lovable preview and production builds**.
 
 It also auto-sets `workerMode: true` on Workers (so logs flush on every event
@@ -58,12 +58,12 @@ export const startInstance = createStart(() => ({
 import { createStart } from "@tanstack/react-start";
 import { flarelog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
-import { getEvent } from "vinxi/http";
+import { getRequestEvent } from "@tanstack/react-start";
 
 export const startInstance = createStart(() => ({
   requestMiddleware: [
     tanstackStartMiddleware(() => {
-      const event = getEvent() as any;
+      const event = getRequestEvent() as any;
       const env = event?.cloudflare?.env ?? process.env;
       return flarelog({
         apiKey: env.FLARELOG_API_KEY,

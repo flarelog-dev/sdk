@@ -31,8 +31,8 @@ characteristics matter:
 1. **Secrets are bindings, not env vars.** Lovable stores your `FLARELOG_API_KEY`
    in its dashboard and injects it as a Worker binding at request time. It is
    **not** present on `process.env` at module load. The SDK works around this
-   by reading the binding off the request event via `getEvent()` from
-   `vinxi/http` — automatically, on the first request.
+   by reading the binding off the request event via `getRequestEvent()` from
+   `@tanstack/react-start` — automatically, on the first request.
 2. **The Worker is short-lived.** Without `workerMode: true`, the SDK uses the
    default Node-style batch processor (`batchSize: 50`, `flushIntervalMs: 5000`).
    The Worker will be suspended before the timer fires, dropping all buffered
@@ -151,12 +151,12 @@ failed. The auto-mode tries `event.cloudflare.env` and
 path, then use the factory form:
 
 ```typescript
-import { getEvent } from "vinxi/http";
+import { getRequestEvent } from "@tanstack/react-start";
 import { flarelog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 
 tanstackStartMiddleware(() => {
-  const event = getEvent() as any;
+  const event = getRequestEvent() as any;
   return flarelog({ apiKey: event?.myAdapter?.env?.FLARELOG_API_KEY });
 })
 ```
