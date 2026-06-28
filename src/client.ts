@@ -47,6 +47,74 @@ export interface FlareLogInternals {
 }
 
 /**
+ * Compare two URLs by host (case-insensitive). Used to detect when the user
+ * has pointed `OTEL_EXPORTER_OTLP_ENDPOINT` at the Flarelog backend while
+ * `FLARELOG_API_KEY` is also set — in that case we skip the OTLP transport
+ * to avoid exporting every log and span twice.
+ *
+ * Only host is compared on purpose: the Flarelog transport uses `/api/v1/...`
+ * while the OTLP transport resolves to `/v1/...`, but both target the same
+ * backend and would produce duplicate records in the dashboard.
+ */
+function isSameFlarelogHost(a: string, b: string): boolean {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return ua.host.toLowerCase() === ub.host.toLowerCase();
+  } catch {
+    // If either side isn't a parseable URL, fall back to a naive
+    // case-insensitive string compare on the entire value.
+    return a.toLowerCase() === b.toLowerCase();
+  }
+}
+
+/**
+ * Decide whether a request should bypass SDK instrumentation entirely.
+ *
+ * Returns `true` when:
+ *   - the request method is `OPTIONS` or `HEAD` (mirrors `@sentry/cloudflare`'s
+ *     behaviour — these are almost always CORS preflight or cache-validation
+ *     traffic that shouldn't generate telemetry), OR
+ *   - the request's URL pathname matches any entry in `ignorePaths`
+ *     (configured by the user; common use case is `["/favicon.ico"]` to keep
+ *     browser-driven noise out of the dashboard).
+ *
+ * `ignorePaths` entries can be:
+ *   - a string  → matched if `pathname === entry`
+ *   - a RegExp  → matched if `entry.test(pathname)`
+ *   - a function → matched if `entry(pathname) === true`
+ */
+function shouldSkipRequest(
+  request: Request,
+  ignorePaths: NonNullable<FlareLogConfig["ignorePaths"]>
+): boolean {
+  if (request.method === "OPTIONS" || request.method === "HEAD") {
+    return true;
+  }
+  if (ignorePaths.length === 0) return false;
+  let pathname: string;
+  try {
+    pathname = new URL(request.url).pathname;
+  } catch {
+    return false;
+  }
+  for (const pattern of ignorePaths) {
+    if (typeof pattern === "string") {
+      if (pathname === pattern) return true;
+    } else if (pattern instanceof RegExp) {
+      if (pattern.test(pathname)) return true;
+    } else if (typeof pattern === "function") {
+      try {
+        if (pattern(pathname)) return true;
+      } catch {
+        // User-supplied matcher threw — swallow to avoid breaking the request.
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * FlareLog — OTel-native logging client for Cloudflare Workers, Node.js, and browsers.
  *
  * v2 is a full rewrite on top of OpenTelemetry. Logs and traces are emitted
@@ -114,6 +182,7 @@ export class FlareLog {
     maxBatchSize: number;
     onDrop: (droppedCount: number) => void;
     workerMode: boolean;
+    ignorePaths: NonNullable<FlareLogConfig["ignorePaths"]>;
   };
   private dedup: DedupTracker;
   private consoleCleanup?: () => void;
@@ -214,6 +283,7 @@ export class FlareLog {
       maxBatchSize: config.maxBatchSize ?? 100,
       onDrop: config.onDrop ?? (() => {}),
       workerMode: isWorker,
+      ignorePaths: config.ignorePaths ?? [],
     };
 
     this.dedup = new DedupTracker({
@@ -257,15 +327,44 @@ export class FlareLog {
 
     const transports: Transport[] = [];
 
-    // 1. OTLP transport — if any OTLP env var or shorthand is set
+    // 1. OTLP transport — if any OTLP env var or shorthand is set.
+    //    Skip it when the OTLP endpoint points at the Flarelog backend AND an
+    //    API key is configured — the FlarelogTransport (added in step 2) will
+    //    handle that case using the correct `/api/v1/{logs,traces}` paths and
+    //    the `Authorization: Bearer <apiKey>` header. Without this guard, every
+    //    log and span is exported twice (once via OTLP to `/v1/{logs,traces}`,
+    //    once via FlarelogTransport to `/api/v1/{logs,traces}`), which is the
+    //    root cause of the "2 calls /v1/logs + 2 calls /v1/traces with a batch
+    //    of 8" duplication on Cloudflare Workers with `nodejs_compat` (where
+    //    both env vars land on `process.env`).
     const otlpEndpoint = config.otlpEndpoint ?? otelEnv.otlpEndpoint;
     const otlpHeaders = config.otlpHeaders ?? otelEnv.otlpHeaders;
-    if (otlpEndpoint || otelEnv.otlpLogsEndpoint || otelEnv.otlpTracesEndpoint) {
+    const otlpLogsEndpoint = otelEnv.otlpLogsEndpoint;
+    const otlpTracesEndpoint = otelEnv.otlpTracesEndpoint;
+    const otlpPointsAtFlarelog =
+      (!!otlpEndpoint && isSameFlarelogHost(otlpEndpoint, flarelogEndpoint)) ||
+      (!!otlpLogsEndpoint && isSameFlarelogHost(otlpLogsEndpoint, flarelogEndpoint)) ||
+      (!!otlpTracesEndpoint && isSameFlarelogHost(otlpTracesEndpoint, flarelogEndpoint));
+    const skipOtlp = otlpPointsAtFlarelog && !!apiKey;
+
+    if (skipOtlp && (otlpEndpoint || otlpLogsEndpoint || otlpTracesEndpoint)) {
+      runWithHookSkipped(() => {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[FlareLog] OTEL_EXPORTER_OTLP_ENDPOINT points at the Flarelog backend " +
+            "and FLARELOG_API_KEY is also set — skipping the OTLP transport to avoid " +
+            "duplicating every log and trace. To silence this warning, either unset " +
+            "OTEL_EXPORTER_OTLP_ENDPOINT or pass `transports` explicitly.",
+        );
+      });
+    }
+
+    if (!skipOtlp && (otlpEndpoint || otlpLogsEndpoint || otlpTracesEndpoint)) {
       transports.push(
         new OTLPTransport({
           endpoint: otlpEndpoint,
-          logsEndpoint: otelEnv.otlpLogsEndpoint,
-          tracesEndpoint: otelEnv.otlpTracesEndpoint,
+          logsEndpoint: otlpLogsEndpoint,
+          tracesEndpoint: otlpTracesEndpoint,
           headers: otlpHeaders,
         })
       );
@@ -484,6 +583,13 @@ export class FlareLog {
    *   automatically carry traceId + spanId
    * - Records exceptions and sets span status
    * - Flushes telemetry via ctx.waitUntil()
+   *
+   * Bypass: if `ctx.skipInstrumentation` is true, OR the request method is
+   * `OPTIONS`/`HEAD`, OR the request's pathname matches any entry in the
+   * `ignorePaths` config, the handler runs without a span, without log
+   * enrichment, and without an end-of-request flush. This is the recommended
+   * way to keep browser-driven noise (e.g. `/favicon.ico`) and CORS preflight
+   * traffic out of your dashboard.
    */
   async withRequest<T>(
     ctx: RequestContext,
@@ -491,6 +597,13 @@ export class FlareLog {
     handler: () => Promise<T>
   ): Promise<T> {
     const req = ctx.request;
+
+    // Bypass path: skip span, log enrichment, and flush entirely.
+    // The handler still runs so the response is unaffected.
+    if (ctx.skipInstrumentation || shouldSkipRequest(req, this.config.ignorePaths)) {
+      return handler();
+    }
+
     const url = new URL(req.url);
 
     // Extract W3C trace context from incoming headers

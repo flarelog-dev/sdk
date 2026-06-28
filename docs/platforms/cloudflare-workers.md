@@ -489,6 +489,53 @@ export default {
 6. **Set user context**: Identify affected users for faster debugging
 7. **Configure autoCapture**: Enable console, globalErrors, and rejections
 8. **Use beforeSend**: Scrub PII before sending logs
+9. **Set `ignorePaths` for browser noise** (see FAQ below) — keeps `/favicon.ico` and static-asset traffic out of your dashboard
+
+## FAQ
+
+### Why am I seeing 2 calls to `/v1/logs` (and 2 to `/v1/traces`) per page load when I only emit one batch of logs?
+
+This is almost always the browser making **two requests** to your Worker per page load — one for the URL the user typed (e.g. `GET /`) and one for `/favicon.ico` (browsers always try to fetch a favicon). Each request triggers a fresh `workerFetch` invocation → 8 fresh logs + 1 fresh span → 1 batch to `/v1/logs` + 1 batch to `/v1/traces`. Total: **2 + 2 = 4 calls**, each with its own batch of 8 logs / 1 span.
+
+The SDK is behaving correctly — each request gets its own batch. The duplication is at the browser level, not in the batching logic. You can confirm this by checking your Worker's invocation count in the Cloudflare dashboard (you'll see 2 invocations per page load).
+
+**Fix**: add `ignorePaths` to your logger config. Common browser-driven noise worth filtering:
+
+```typescript
+import { flarelog, workerFetch } from "@flarelog/sdk";
+
+const logger = flarelog({
+  apiKey: env.FLARELOG_API_KEY,
+  ignorePaths: [
+    "/favicon.ico",        // browsers always fetch this
+    "/robots.txt",         // crawlers
+    "/sitemap.xml",
+    /^\/static\//,         // any static-asset prefix you serve
+    /^\/assets\//,
+  ],
+});
+
+export default {
+  fetch: workerFetch(logger, async (request, env, ctx) => {
+    // Your handler code — only runs instrumented for non-ignored requests
+    return new Response("Hello");
+  }),
+};
+```
+
+`ignorePaths` accepts strings (exact match), RegExps (pattern match), or functions (custom predicate). Matching is done against `new URL(request.url).pathname` only — query string and host are ignored. When a request matches, the SDK skips span creation, log enrichment, and end-of-request flush entirely; your handler still runs and returns its response normally.
+
+### What about `OPTIONS` and `HEAD` requests?
+
+The SDK automatically bypasses instrumentation for `OPTIONS` and `HEAD` requests — they're almost always CORS preflight or cache-validation traffic that shouldn't generate telemetry. This mirrors `@sentry/cloudflare`'s behavior. You don't need to configure anything for this.
+
+### I'm still seeing duplicate calls — what else could it be?
+
+1. **You have both `FLARELOG_API_KEY` and `OTEL_EXPORTER_OTLP_ENDPOINT=https://flarelog.dev` set** — this creates two transports that both target Flarelog and every batch gets sent twice (once to `/v1/*` via OTLP, once to `/api/v1/*` via the Flarelog transport). Fix: either unset `OTEL_EXPORTER_OTLP_ENDPOINT` (the SDK auto-detects this and skips the OTLP transport), or set it to a different backend like Grafana Cloud.
+2. **You wrapped your handler twice** — `workerFetch(logger, workerFetch(logger, handler))` creates two nested `withRequest` calls and two SERVER spans per request. Don't double-wrap.
+3. **You're calling `logger.flush()` manually inside the handler** — `workerFetch()` already flushes at request end via `ctx.waitUntil()`. Calling `flush()` again mid-handler is fine (the chain dedupes), but doing it on every log is wasteful.
+
+
 
 ## Error Handling Patterns
 

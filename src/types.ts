@@ -166,6 +166,40 @@ export interface FlareLogConfig {
 
   /** Headers for the OTLP transport (e.g. Authorization). Shorthand for transports[0].headers. */
   otlpHeaders?: Record<string, string>;
+
+  /**
+   * Request path patterns to skip when wrapping handlers with
+   * `workerFetch()`, `pagesFunction()`, or `logger.withRequest()`.
+   *
+   * When the incoming request's URL pathname matches any entry, the SDK
+   * bypasses span creation, log emission, and end-of-request flush entirely
+   * — the handler runs as if the SDK weren't installed. This is the
+   * recommended way to keep browser-driven noise (e.g. `/favicon.ico`,
+   * `/robots.txt`, static-asset prefixes) out of your dashboard without
+   * touching your handler code.
+   *
+   * Each entry can be:
+   * - a string: matched if the pathname equals it (case-sensitive)
+   * - a RegExp: matched if `pattern.test(pathname)` returns true
+   * - a function: matched if `(pathname) => boolean` returns true
+   *
+   * Matching happens against `new URL(request.url).pathname` only — query
+   * string and host are ignored.
+   *
+   * @example
+   * ```ts
+   * const logger = flarelog({
+   *   apiKey: env.FLARELOG_API_KEY,
+   *   ignorePaths: ["/favicon.ico", "/robots.txt", /^\/static\//],
+   * });
+   * ```
+   *
+   * Bypass is also applied automatically to `OPTIONS` and `HEAD` requests
+   * (mirrors `@sentry/cloudflare`'s behaviour) — those methods are almost
+   * always CORS preflight or cache-validation traffic and shouldn't
+   * generate telemetry.
+   */
+  ignorePaths?: Array<string | RegExp | ((pathname: string) => boolean)>;
 }
 
 /**
@@ -338,6 +372,13 @@ export interface RequestContext {
   traceId?: string;
   /** Additional context metadata */
   metadata?: Record<string, unknown>;
+  /**
+   * When true, skip all instrumentation for this request — no span, no log
+   * enrichment, no end-of-request flush. Set this from your wrapper when
+   * you've decided the request doesn't need telemetry (e.g. favicon, static
+   * assets, OPTIONS/HEAD preflight). The handler still runs.
+   */
+  skipInstrumentation?: boolean;
 }
 
 /**

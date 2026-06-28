@@ -12,6 +12,12 @@ import type { WorkerFetchHandler, PagesFunctionHandler } from "../types";
  * - Records exceptions on the span and sets span status
  * - Flushes telemetry via ctx.waitUntil() (with blocking fallback for tests)
  *
+ * Bypass: requests whose method is `OPTIONS` or `HEAD`, or whose URL pathname
+ * matches any entry in the logger's `ignorePaths` config, skip instrumentation
+ * entirely (no span, no flush). This keeps CORS preflight traffic and
+ * browser-driven noise like `/favicon.ico` out of your dashboard without
+ * requiring changes to your handler. See {@link FlareLogConfig.ignorePaths}.
+ *
  * @example
  * ```typescript
  * import { flarelog, workerFetch } from "@flarelog/sdk";
@@ -34,6 +40,20 @@ import type { WorkerFetchHandler, PagesFunctionHandler } from "../types";
  * //   OTEL_EXPORTER_OTLP_HEADERS = "Authorization=Basic <base64>"
  * const logger = flarelog({});
  * // → ships to both Flarelog dashboard and Grafana Cloud, plus console
+ * ```
+ *
+ * @example Skip favicon and static assets
+ * ```typescript
+ * const logger = flarelog({
+ *   apiKey: env.FLARELOG_API_KEY,
+ *   ignorePaths: ["/favicon.ico", "/robots.txt", /^\/static\//],
+ * });
+ *
+ * export default {
+ *   fetch: workerFetch(logger, async (request, env, ctx) => {
+ *     return new Response("Hello");
+ *   }),
+ * };
  * ```
  */
 export function workerFetch<T = Response>(
@@ -60,6 +80,9 @@ export function workerFetch<T = Response>(
  * - All logs emitted inside the handler carry the span's traceId + spanId
  * - Records exceptions on the span and sets span status
  * - Flushes telemetry via context.waitUntil() (with blocking fallback for tests)
+ *
+ * Honors the same `OPTIONS`/`HEAD` and `ignorePaths` bypass as
+ * {@link workerFetch} — see {@link FlareLogConfig.ignorePaths} for details.
  *
  * @example
  * ```typescript
