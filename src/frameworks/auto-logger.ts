@@ -9,28 +9,38 @@ import { detectRuntime } from "../otel/env";
 // shape varies between adapter versions, so we probe the known paths and cache
 // the result.
 //
-// `getEvent()` from `vinxi/http` is the only sync way to reach the request
-// event from inside TanStack Start middleware. We dynamic-import it so the
-// SDK doesn't take a hard dep on vinxi (it's only present in TanStack Start
-// apps). The import is cached after first call.
+// TanStack Start v1+ uses `@tanstack/react-start` instead of `vinxi`. We try
+// both APIs to maintain backward compatibility with pre-v1 apps.
 
 type EnvRecord = Record<string, string | undefined>;
 
-let _vinxiGetEvent: (() => unknown) | null | undefined;
+let _getEventFn: (() => unknown) | null | undefined;
 let _cachedWorkerEnv: EnvRecord | null = null;
 
 async function tryLoadGetEvent(): Promise<(() => unknown) | null> {
-  if (_vinxiGetEvent !== undefined) return _vinxiGetEvent;
+  if (_getEventFn !== undefined) return _getEventFn;
+
+  // 1. Try TanStack Start v1+ API first
   try {
-    // vinxi/http is only present in TanStack Start apps. Dynamic import keeps
-    // this optional — if the module isn't installed, we fall back to null.
-    // @ts-expect-error — vinxi/http has no types in this repo and is optional.
-    const mod = await import("vinxi/http");
-    _vinxiGetEvent = (mod as { getEvent?: () => unknown }).getEvent ?? null;
+    const mod = await import("@tanstack/react-start") as unknown as { getRequestEvent?: () => unknown };
+    if (mod.getRequestEvent) {
+      _getEventFn = mod.getRequestEvent;
+      return _getEventFn;
+    }
   } catch {
-    _vinxiGetEvent = null;
+    /* ignore — module not installed */
   }
-  return _vinxiGetEvent;
+
+  // 2. Fall back to vinxi/http (pre-v1 TanStack Start)
+  try {
+    // @ts-ignore — optional peer dep, may not be installed
+    const mod = await import("vinxi/http") as unknown as { getEvent?: () => unknown };
+    _getEventFn = mod.getEvent ?? null;
+  } catch {
+    _getEventFn = null;
+  }
+
+  return _getEventFn;
 }
 
 function extractEnvFromEvent(event: unknown): EnvRecord | null {
@@ -146,6 +156,6 @@ export async function autoLogger(
  * Not part of the public API — may be removed in any release.
  */
 export function __resetAutoLoggerCache(): void {
-  _vinxiGetEvent = undefined;
+  _getEventFn = undefined;
   _cachedWorkerEnv = null;
 }
