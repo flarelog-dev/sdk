@@ -30,10 +30,10 @@ import {
   __resetAutoLoggerCache,
 } from "../src/frameworks/auto-logger";
 
-// Mock vinxi/http — simulates TanStack Start / vinxi runtime
+// Mock @tanstack/react-start so auto-logger can find a Worker env binding in tests.
 let __currentEvent: unknown = null;
-vi.mock("vinxi/http", () => ({
-  getEvent: () => __currentEvent,
+vi.mock("@tanstack/react-start", () => ({
+  getRequestEvent: () => __currentEvent,
 }));
 
 describe("Lovable / Workers symptom — negative regression tests", () => {
@@ -246,7 +246,7 @@ describe("Lovable / Workers symptom — negative regression tests", () => {
       expect(env?.FLARELOG_API_KEY).toBe("fl_from_process");
     });
 
-    it("returns Worker env binding when getEvent() has one", async () => {
+    it("returns Worker env binding when getRequestEvent() has one", async () => {
       __currentEvent = {
         cloudflare: { env: { FLARELOG_API_KEY: "fl_from_binding" } },
       };

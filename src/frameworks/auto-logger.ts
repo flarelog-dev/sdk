@@ -9,8 +9,10 @@ import { detectRuntime } from "../otel/env";
 // shape varies between adapter versions, so we probe the known paths and cache
 // the result.
 //
-// TanStack Start v1+ uses `@tanstack/react-start` instead of `vinxi`. We try
-// both APIs to maintain backward compatibility with pre-v1 apps.
+// TanStack Start v1 exposes the current request event via
+// `getRequestEvent()` from `@tanstack/react-start`. We probe that API and,
+// if missing, fall back to an empty result so the SDK stays zero-dependency
+// and never pulls in unstable deep dependencies such as `vinxi/http`.
 
 type EnvRecord = Record<string, string | undefined>;
 
@@ -20,9 +22,11 @@ let _cachedWorkerEnv: EnvRecord | null = null;
 async function tryLoadGetEvent(): Promise<(() => unknown) | null> {
   if (_getEventFn !== undefined) return _getEventFn;
 
-  // 1. Try TanStack Start v1+ API first
+  // Try TanStack Start v1 API (getRequestEvent from @tanstack/react-start).
   try {
-    const mod = await import("@tanstack/react-start") as unknown as { getRequestEvent?: () => unknown };
+    const mod = (await import("@tanstack/react-start")) as unknown as {
+      getRequestEvent?: () => unknown;
+    };
     if (mod.getRequestEvent) {
       _getEventFn = mod.getRequestEvent;
       return _getEventFn;
@@ -31,15 +35,10 @@ async function tryLoadGetEvent(): Promise<(() => unknown) | null> {
     /* ignore — module not installed */
   }
 
-  // 2. Fall back to vinxi/http (pre-v1 TanStack Start)
-  try {
-    // @ts-ignore — optional peer dep, may not be installed
-    const mod = await import("vinxi/http") as unknown as { getEvent?: () => unknown };
-    _getEventFn = mod.getEvent ?? null;
-  } catch {
-    _getEventFn = null;
-  }
-
+  // No fallback to `vinxi/http` — it is a pre-release deep dependency of
+  // TanStack Start v1 and is not guaranteed to be installed. Returning null
+  // lets resolveWorkerEnv fall back to process.env or an explicit key.
+  _getEventFn = null;
   return _getEventFn;
 }
 
@@ -58,7 +57,7 @@ function extractEnvFromEvent(event: unknown): EnvRecord | null {
  * current runtime. Resolution order:
  *   1. `process.env` — Node, Vercel, Workers with `nodejs_compat` + plaintext vars
  *   2. The Cloudflare Worker `env` binding on the current request event
- *     (looked up via `getEvent()` from `vinxi/http`)
+ *     (looked up via `getRequestEvent()` from `@tanstack/react-start`)
  *
  * Returns `null` if nothing was found, so the caller can decide whether to
  * fall back to console-only logging.

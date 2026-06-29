@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FlareLog } from "../src/client";
 import { mockFetch, wasFetchCalledForUrl } from "./helpers";
 
+// Shared mock state. Tests set this to simulate the current request event.
+let __currentEvent: unknown = null;
+
 // Mock @tanstack/react-start (an optional peer dep not installed in this repo).
-// The mock captures the `.server(fn)` callback so tests can invoke it directly
-// with a synthesized middleware context.
+// The mock captures the `.server(fn)` callback and exposes `getRequestEvent`
+// so tests can simulate the current request event.
 vi.mock("@tanstack/react-start", () => {
   const builder = {
     _serverFn: null as ((ctx: unknown) => Promise<unknown>) | null,
@@ -24,15 +27,9 @@ vi.mock("@tanstack/react-start", () => {
   };
   return {
     createMiddleware: () => builder,
+    getRequestEvent: () => __currentEvent,
   };
 });
-
-// Mock vinxi/http so the auto-logger can find a Worker env binding in tests.
-// Each test can override `__currentEvent` to simulate different request events.
-let __currentEvent: unknown = null;
-vi.mock("vinxi/http", () => ({
-  getEvent: () => __currentEvent,
-}));
 
 import {
   tanstackStartMiddleware,
@@ -275,7 +272,7 @@ describe("tanstackStartMiddleware — zero-arg auto mode", () => {
     await serverFn({ request: makeRequest({ "x-trace-id": "t2" }), context: {}, next });
 
     // Both requests should flow through; the cache prevents re-instantiating
-    // the logger on every request, which would re-import vinxi/http each time.
+    // the logger on every request, which would re-import @tanstack/react-start each time.
     expect(next).toHaveBeenCalledTimes(2);
   });
 

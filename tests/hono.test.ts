@@ -3,10 +3,10 @@ import { FlareLog } from "../src/client";
 import { mockFetch, wasFetchCalledForUrl } from "./helpers";
 import { __resetAutoLoggerCache } from "../src/frameworks/auto-logger";
 
-// Mock vinxi/http so the auto-logger can find a Worker env binding in tests.
+// Mock @tanstack/react-start so the auto-logger can find a Worker env binding in tests.
 let __currentEvent: unknown = null;
-vi.mock("vinxi/http", () => ({
-  getEvent: () => __currentEvent,
+vi.mock("@tanstack/react-start", () => ({
+  getRequestEvent: () => __currentEvent,
 }));
 
 import { honoMiddleware } from "../src/frameworks/hono";
