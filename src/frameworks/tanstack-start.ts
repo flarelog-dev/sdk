@@ -123,10 +123,10 @@ export type TanstackStartLoggerInput =
 export function tanstackStartMiddleware(
   loggerOrFactory?: TanstackStartLoggerInput,
 ): unknown {
-  // Cache for the auto-logger mode. The factory is async (it may need to
-  // import vinxi/http and read the request event), so we memoize after the
-  // first request. On Workers, the same isolate handles many requests, so
-  // this avoids re-creating the logger (and re-reading the env) per request.
+  // Cache for the auto-logger mode. The factory is async (it may need to read
+  // the request event via @tanstack/react-start), so we memoize after the first
+  // request. On Workers, the same isolate handles many requests, so this avoids
+  // re-creating the logger (and re-reading the env) per request.
   let autoLoggerPromise: Promise<FlareLog> | null = null;
 
   return createMiddleware().server(async ({ next, request }) => {
