@@ -20,6 +20,12 @@ import { mockFetch, wasFetchCalledForUrl } from "./helpers";
 //   - Or via `process.env` inside `.server()` callbacks when `nodejs_compat`
 //     is enabled and `@cloudflare/vite-plugin` is configured.
 //   - The legacy `getRequestEvent()` API does NOT exist in v1 stable.
+//
+// Test plumbing: production code hides the `cloudflare:workers` specifier
+// behind a `new Function()` constructor so bundlers (Vite/esbuild/webpack/
+// rollup) can't see it. That also breaks `vi.mock("cloudflare:workers")`,
+// so we use the SDK's internal test hook `__setCloudflareEnvForTests()` to
+// seed the binding cache directly.
 
 // Mock @tanstack/react-start — only the surface the SDK actually uses.
 // The mock captures the `.server(fn)` callback so tests can invoke it directly.
@@ -46,15 +52,6 @@ vi.mock("@tanstack/react-start", () => {
   };
 });
 
-// Mock `cloudflare:workers` (a runtime-provided module on Workers).
-// Tests set `__cfEnv` to simulate Worker env bindings.
-let __cfEnv: Record<string, string | undefined> | null = null;
-vi.mock("cloudflare:workers", () => ({
-  get env() {
-    return __cfEnv;
-  },
-}));
-
 import {
   tanstackStartMiddleware,
   withTanStackStart,
@@ -62,6 +59,7 @@ import {
   resolveWorkerEnv,
   __resetAutoLoggerCache,
 } from "../src/frameworks/tanstack-start";
+import { __setCloudflareEnvForTests } from "../src/frameworks/auto-logger";
 
 interface BuilderStub {
   _serverFn: ((ctx: unknown) => Promise<unknown>) | null;
@@ -100,7 +98,6 @@ describe("tanstackStartMiddleware", () => {
   beforeEach(() => {
     fetchMock = mockFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    __cfEnv = null;
     __resetAutoLoggerCache();
   });
 
@@ -331,7 +328,6 @@ describe("tanstackStartMiddleware — zero-arg auto mode", () => {
   beforeEach(() => {
     fetchMock = mockFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    __cfEnv = null;
     __resetAutoLoggerCache();
     // Ensure process.env doesn't leak FLARELOG_API_KEY into auto-mode tests
     delete process.env.FLARELOG_API_KEY;
@@ -342,8 +338,9 @@ describe("tanstackStartMiddleware — zero-arg auto mode", () => {
   });
 
   it("auto-creates a logger from the Cloudflare Workers env binding", async () => {
-    // Simulate a Cloudflare Worker: `cloudflare:workers` exposes the env binding.
-    __cfEnv = { FLARELOG_API_KEY: "fl_from_binding" };
+    // Simulate a Cloudflare Worker: seed the cache that production code would
+    // populate via `import { env } from "cloudflare:workers"`.
+    __setCloudflareEnvForTests({ FLARELOG_API_KEY: "fl_from_binding" });
 
     const middleware = tanstackStartMiddleware() as unknown as BuilderStub;
     const serverFn = middleware._serverFn!;
@@ -371,7 +368,7 @@ describe("tanstackStartMiddleware — zero-arg auto mode", () => {
   });
 
   it("caches the auto-logger across requests within the same middleware instance", async () => {
-    __cfEnv = { FLARELOG_API_KEY: "fl_cached" };
+    __setCloudflareEnvForTests({ FLARELOG_API_KEY: "fl_cached" });
 
     const middleware = tanstackStartMiddleware() as unknown as BuilderStub;
     const serverFn = middleware._serverFn!;
@@ -386,32 +383,28 @@ describe("tanstackStartMiddleware — zero-arg auto mode", () => {
   });
 
   it("resolveWorkerEnv returns null when no env source is available", async () => {
-    __cfEnv = null;
-    __resetAutoLoggerCache();
     delete process.env.FLARELOG_API_KEY;
     expect(await resolveWorkerEnv()).toBeNull();
   });
 
   it("resolveWorkerEnv reads from cloudflare:workers env binding", async () => {
-    __cfEnv = { FLARELOG_API_KEY: "x" };
-    __resetAutoLoggerCache();
+    __setCloudflareEnvForTests({ FLARELOG_API_KEY: "x" });
     const env = await resolveWorkerEnv();
     expect(env?.FLARELOG_API_KEY).toBe("x");
   });
 
   it("resolveWorkerEnv prefers explicit env arg over cloudflare:workers binding", async () => {
-    __cfEnv = { FLARELOG_API_KEY: "from_binding" };
-    __resetAutoLoggerCache();
+    __setCloudflareEnvForTests({ FLARELOG_API_KEY: "from_binding" });
     const env = await resolveWorkerEnv({ FLARELOG_API_KEY: "from_arg" });
     expect(env?.FLARELOG_API_KEY).toBe("from_arg");
   });
 
   it("resolveWorkerEnv caches the binding across calls within the same isolate", async () => {
-    __cfEnv = { FLARELOG_API_KEY: "fl_cached" };
-    __resetAutoLoggerCache();
+    __setCloudflareEnvForTests({ FLARELOG_API_KEY: "fl_cached" });
     const first = await resolveWorkerEnv();
-    // Mutate the binding — second call should still return the cached value.
-    __cfEnv = { FLARELOG_API_KEY: "fl_changed" };
+    // Mutate the binding — second call should still return the cached value
+    // because the first call populated `_cachedWorkerEnv`.
+    __setCloudflareEnvForTests({ FLARELOG_API_KEY: "fl_changed" });
     const second = await resolveWorkerEnv();
     expect(first?.FLARELOG_API_KEY).toBe("fl_cached");
     expect(second?.FLARELOG_API_KEY).toBe("fl_cached"); // cached, not re-read
