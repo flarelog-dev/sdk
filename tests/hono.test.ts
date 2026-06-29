@@ -1,18 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FlareLog } from "../src/client";
 import { mockFetch, wasFetchCalledForUrl } from "./helpers";
-import { __resetAutoLoggerCache } from "../src/frameworks/auto-logger";
+import {
+  __resetAutoLoggerCache,
+  __setCloudflareEnvForTests,
+} from "../src/frameworks/auto-logger";
 
-// Mock `cloudflare:workers` (a runtime-provided module on Workers).
-// Tests set `__cfEnv` to simulate Worker env bindings. On Node/Bun the real
-// `import("cloudflare:workers")` throws synchronously — the auto-logger
-// catches that and falls back to process.env / the explicit `c.env` arg.
-let __cfEnv: Record<string, string | undefined> | null = null;
-vi.mock("cloudflare:workers", () => ({
-  get env() {
-    return __cfEnv;
-  },
-}));
+// Test plumbing: production code hides the `cloudflare:workers` specifier
+// behind a `new Function()` constructor so bundlers can't see it. That also
+// breaks `vi.mock("cloudflare:workers")`, so we use the SDK's internal test
+// hook `__setCloudflareEnvForTests()` to seed the binding cache directly.
 
 import { honoMiddleware } from "../src/frameworks/hono";
 
@@ -60,7 +57,7 @@ describe("honoMiddleware", () => {
   beforeEach(() => {
     fetchMock = mockFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    __cfEnv = null;
+    
     __resetAutoLoggerCache();
     delete process.env.FLARELOG_API_KEY;
   });
@@ -192,7 +189,7 @@ describe("honoMiddleware — zero-arg auto mode", () => {
   beforeEach(() => {
     fetchMock = mockFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    __cfEnv = null;
+    
     __resetAutoLoggerCache();
     delete process.env.FLARELOG_API_KEY;
   });

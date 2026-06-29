@@ -34,9 +34,18 @@ let _cachedWorkerEnv: EnvRecord | null = null;
  * - On Cloudflare Workers (with or without `nodejs_compat`), this is the
  *   canonical way to read bindings from module scope. The module is provided
  *   by the Workers runtime and is always available there.
- * - On Node / Vercel / Bun / Deno, the dynamic `import("cloudflare:workers")`
- *   throws synchronously (the module does not exist). We catch and cache `null`
- *   so subsequent calls are free.
+ * - On Node / Vercel / Bun / Deno, the dynamic import throws synchronously
+ *   (the module does not exist). We catch and cache `null` so subsequent
+ *   calls are free.
+ *
+ * **Bundler hiding.** `cloudflare:workers` is a runtime-provided module —
+ * it has no npm package, no installable file. Vite, esbuild, webpack, and
+ * rollup all scan for dynamic-import specifiers at build time and would
+ * fail to resolve it (`Failed to resolve import "cloudflare:workers"`).
+ * We hide the specifier from static analysis by routing through a
+ * `Function()` constructor — the resulting string is invisible to
+ * bundlers, so they leave it alone and the import only fires at runtime
+ * inside the Workers isolate where the module actually exists.
  *
  * The result is cached for the lifetime of the isolate. On a Worker, that
  * means it's cached per-Worker-instance (which is what we want — bindings
@@ -46,16 +55,25 @@ async function tryLoadCloudflareEnv(): Promise<EnvRecord | null> {
   if (_cloudflareEnv !== undefined) return _cloudflareEnv;
 
   try {
-    // `cloudflare:workers` is a runtime-provided module on Workers.
-    // The dynamic import keeps the SDK zero-dependency on Node and lets
-    // bundlers tree-shake this path away for non-Worker builds.
-    const mod = (await import("cloudflare:workers")) as {
-      env?: EnvRecord;
-    };
+    // Hide `cloudflare:workers` from bundler static analysis. Vite / esbuild /
+    // webpack / rollup all fail to resolve this specifier at build time
+    // because there is no installable npm package — the module is injected
+    // by the Cloudflare Workers runtime. Routing through `new Function()`
+    // makes the specifier invisible to bundler scans; the import only fires
+    // at runtime inside a Worker isolate.
+    //
+    // Equivalent to `await import("cloudflare:workers")` at runtime, but
+    // opaque to static analysis.
+    const dynamicImport = new Function(
+      "spec",
+      "return import(spec)",
+    ) as (spec: string) => Promise<{ env?: EnvRecord }>;
+    const mod = await dynamicImport("cloudflare:workers");
     _cloudflareEnv = mod.env ?? null;
     return _cloudflareEnv;
   } catch {
-    // Not on Cloudflare Workers — module doesn't exist. Cache the miss.
+    // Not on Cloudflare Workers — module doesn't exist (Node/Vercel/Bun/Deno
+    // dev), or `new Function` is blocked by a strict CSP. Cache the miss.
     _cloudflareEnv = null;
     return _cloudflareEnv;
   }
@@ -178,4 +196,22 @@ export async function autoLogger(
 export function __resetAutoLoggerCache(): void {
   _cloudflareEnv = undefined;
   _cachedWorkerEnv = null;
+}
+
+/**
+ * @internal Inject a fake `cloudflare:workers` env binding for tests.
+ *
+ * Production code resolves the binding via `new Function("return import(spec)")`
+ * at runtime — this hides the `cloudflare:workers` specifier from bundlers
+ * (Vite / esbuild / webpack / rollup) so they don't try to resolve it at
+ * build time. The side effect is that Vitest's `vi.mock("cloudflare:workers")`
+ * can't intercept the import (it only catches regular `import()` calls).
+ *
+ * Tests call this helper to seed the cache directly, bypassing the runtime
+ * probe. Call `__resetAutoLoggerCache()` in `beforeEach` to clear.
+ *
+ * Not part of the public API — may be removed in any release.
+ */
+export function __setCloudflareEnvForTests(env: EnvRecord | null): void {
+  _cloudflareEnv = env;
 }
