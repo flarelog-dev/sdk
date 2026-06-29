@@ -37,6 +37,42 @@ function pathOf(url: string): string {
   }
 }
 
+/**
+ * Extract the HTTP status code from the value returned by TanStack Start v1's
+ * `next()` callback.
+ *
+ * TanStack Start v1's `RequestServerResult` shape is:
+ *   `{ request, pathname, context, response: Response }`
+ * — there is no top-level `status` field. Status lives on
+ * `result.response.status`.
+ *
+ * `next()` may also return:
+ *   - a raw `Response` (when middleware short-circuits with `new Response(...)`)
+ *   - an object with a numeric `status` (older / custom middleware shapes)
+ *
+ * Returns `undefined` when no status can be found — callers fall back to INFO.
+ */
+function readResponseStatus(result: unknown): number | undefined {
+  if (!result || typeof result !== "object") {
+    // A raw `Response` is an object, so this branch only catches
+    // non-object returns (e.g. `undefined` from a void middleware).
+    return undefined;
+  }
+
+  // 1. TanStack Start v1 shape: `{ response: Response }`
+  const r = result as { response?: { status?: unknown }; status?: unknown };
+  if (typeof r.response?.status === "number") {
+    return r.response.status;
+  }
+
+  // 2. Raw Response returned directly (short-circuit case)
+  if (typeof r.status === "number") {
+    return r.status;
+  }
+
+  return undefined;
+}
+
 function createChildLogger(
   logger: FlareLog,
   request: RequestLike,
@@ -89,10 +125,12 @@ export type TanstackStartLoggerInput =
  * backend get dropped. On long-lived runtimes (Node, Vercel) the extra flush
  * is a cheap no-op because the batch processor already drained.
  *
- * Note: TanStack Start does not expose a response status reader from within
- * request middleware (only setters like `setResponseStatus`). When `next()`
- * returns a result carrying a numeric `status` field it is used for level
- * mapping; otherwise completion logs at INFO.
+ * Note: TanStack Start v1's `next()` returns either a raw `Response` (when a
+ * middleware short-circuits) or a `RequestServerResult` shaped like
+ * `{ request, pathname, context, response }`. The middleware reads
+ * `result.response.status` (or `result.status` for raw Responses) to map the
+ * HTTP status to a log level (4xx → WARN, 5xx → ERROR). When no status is
+ * available, completion logs at INFO.
  *
  * @example Zero-config — works on Node, Vercel, Cloudflare Workers, Lovable
  * ```typescript
@@ -105,7 +143,8 @@ export type TanstackStartLoggerInput =
  * }));
  * ```
  * The SDK auto-detects the runtime and reads `FLARELOG_API_KEY` from
- * `process.env` (Node/Vercel) or the Worker `env` binding (Workers/Lovable).
+ * `process.env` (Node/Vercel/Workers-with-nodejs_compat) or the
+ * `cloudflare:workers` `env` binding (Workers/Lovable without nodejs_compat).
  *
  * @example Eager logger — when you want custom config
  * ```typescript
@@ -123,8 +162,8 @@ export type TanstackStartLoggerInput =
 export function tanstackStartMiddleware(
   loggerOrFactory?: TanstackStartLoggerInput,
 ): unknown {
-  // Cache for the auto-logger mode. The factory is async (it may need to read
-  // the request event via @tanstack/react-start), so we memoize after the first
+  // Cache for the auto-logger mode. The factory is async (it probes
+  // `cloudflare:workers` on the first call), so we memoize after the first
   // request. On Workers, the same isolate handles many requests, so this avoids
   // re-creating the logger (and re-reading the env) per request.
   let autoLoggerPromise: Promise<FlareLog> | null = null;
@@ -151,10 +190,12 @@ export function tanstackStartMiddleware(
         context: { logger: child, traceId },
       });
       const duration = Date.now() - start;
-      const status =
-        typeof (result as { status?: unknown })?.status === "number"
-          ? (result as { status: number }).status
-          : undefined;
+      // TanStack Start v1's `next()` returns either a raw `Response` or a
+      // `RequestServerResult` shaped like `{ request, pathname, context,
+      // response }`. Status lives on `result.response.status` (or
+      // `result.status` if the caller returned a raw Response). Older / custom
+      // setups may also return `{ status }` directly — handle all three.
+      const status = readResponseStatus(result);
       child.log(
         resolveLevel(status),
         "Request completed",

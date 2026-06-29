@@ -5,15 +5,20 @@
  *   "logs work in dev but not in preview"
  *
  * Root cause: on Cloudflare Workers (incl. Lovable preview/production), secrets
- * arrive as `env` bindings on the request event — NOT on `process.env`. If the
- * SDK is constructed eagerly at module load with `flarelog({ apiKey:
+ * arrive as `env` bindings — NOT on `process.env` at module load. If the SDK is
+ * constructed eagerly at module load with `flarelog({ apiKey:
  * process.env.FLARELOG_API_KEY! })`, the apiKey is `undefined`, the SDK silently
  * falls back to `ConsoleTransport`, and nothing ships to the dashboard.
+ *
+ * In TanStack Start v1 the binding is reachable via `import { env } from
+ * "cloudflare:workers"` (the canonical Cloudflare-runtime module). The legacy
+ * `getRequestEvent()` API was removed before the v1 stable release and is NOT
+ * exported by `@tanstack/react-start` >= 1.0.0.
  *
  * These tests assert that:
  *   1. The silent fallback now emits a `console.warn` (loud failure mode).
  *   2. The user can silence the warning with `warnOnConsoleFallback: false`.
- *   3. `autoLogger()` resolves the API key from the Worker `env` binding.
+ *   3. `autoLogger()` resolves the API key from `cloudflare:workers` env.
  *   4. `autoLogger()` resolves from `process.env` when no binding is present.
  *   5. `autoLogger()` warns + falls back when neither source has the key.
  *
@@ -30,10 +35,15 @@ import {
   __resetAutoLoggerCache,
 } from "../src/frameworks/auto-logger";
 
-// Mock @tanstack/react-start so auto-logger can find a Worker env binding in tests.
-let __currentEvent: unknown = null;
-vi.mock("@tanstack/react-start", () => ({
-  getRequestEvent: () => __currentEvent,
+// Mock `cloudflare:workers` (a runtime-provided module on Workers).
+// Tests set `__cfEnv` to simulate Worker env bindings. On Node/Vercel the
+// real `import("cloudflare:workers")` throws synchronously — the auto-logger
+// catches that and falls back to process.env.
+let __cfEnv: Record<string, string | undefined> | null = null;
+vi.mock("cloudflare:workers", () => ({
+  get env() {
+    return __cfEnv;
+  },
 }));
 
 describe("Lovable / Workers symptom — negative regression tests", () => {
@@ -43,7 +53,7 @@ describe("Lovable / Workers symptom — negative regression tests", () => {
   beforeEach(() => {
     fetchMock = mockFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    __currentEvent = null;
+    __cfEnv = null;
     __resetAutoLoggerCache();
     delete process.env.FLARELOG_API_KEY;
     delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
@@ -122,9 +132,7 @@ describe("Lovable / Workers symptom — negative regression tests", () => {
 
   describe("autoLogger() — the fix for Workers / Lovable", () => {
     it("resolves FLARELOG_API_KEY from the Worker env binding (the Lovable case)", async () => {
-      __currentEvent = {
-        cloudflare: { env: { FLARELOG_API_KEY: "fl_from_binding" } },
-      };
+      __cfEnv = { FLARELOG_API_KEY: "fl_from_binding" };
 
       const logger = await autoLogger();
       logger.info("test log");
@@ -148,7 +156,7 @@ describe("Lovable / Workers symptom — negative regression tests", () => {
 
     it("warns + falls back when NEITHER source has the key (the bug)", async () => {
       // No binding, no process.env — exactly the Lovable preview failure mode.
-      __currentEvent = null;
+      __cfEnv = null;
       __resetAutoLoggerCache();
 
       const logger = await autoLogger();
@@ -191,9 +199,7 @@ describe("Lovable / Workers symptom — negative regression tests", () => {
     it("reproduces the original bug: eager logger fails on Workers", async () => {
       // Simulate Lovable preview: no FLARELOG_API_KEY on process.env,
       // but it IS available as a Worker binding.
-      __currentEvent = {
-        cloudflare: { env: { FLARELOG_API_KEY: "fl_lovable_preview" } },
-      };
+      __cfEnv = { FLARELOG_API_KEY: "fl_lovable_preview" };
 
       // This is what the OLD docs told users to do:
       const eagerLogger = new FlareLog({
@@ -211,9 +217,7 @@ describe("Lovable / Workers symptom — negative regression tests", () => {
     });
 
     it("verifies the fix: autoLogger() ships the same log on the same runtime", async () => {
-      __currentEvent = {
-        cloudflare: { env: { FLARELOG_API_KEY: "fl_lovable_preview" } },
-      };
+      __cfEnv = { FLARELOG_API_KEY: "fl_lovable_preview" };
 
       const fixedLogger = await autoLogger();
       fixedLogger.info("this log WILL ship");
@@ -232,7 +236,7 @@ describe("Lovable / Workers symptom — negative regression tests", () => {
 
   describe("resolveWorkerEnv() — env source resolution", () => {
     it("returns null when no source has the API key", async () => {
-      __currentEvent = null;
+      __cfEnv = null;
       __resetAutoLoggerCache();
       delete process.env.FLARELOG_API_KEY;
       expect(await resolveWorkerEnv()).toBeNull();
@@ -240,30 +244,26 @@ describe("Lovable / Workers symptom — negative regression tests", () => {
 
     it("returns process.env when FLARELOG_API_KEY is set there", async () => {
       process.env.FLARELOG_API_KEY = "fl_from_process";
-      __currentEvent = null;
+      __cfEnv = null;
       __resetAutoLoggerCache();
       const env = await resolveWorkerEnv();
       expect(env?.FLARELOG_API_KEY).toBe("fl_from_process");
     });
 
-    it("returns Worker env binding when getRequestEvent() has one", async () => {
-      __currentEvent = {
-        cloudflare: { env: { FLARELOG_API_KEY: "fl_from_binding" } },
-      };
+    it("returns Worker env binding when cloudflare:workers has one", async () => {
+      __cfEnv = { FLARELOG_API_KEY: "fl_from_binding" };
       __resetAutoLoggerCache();
       const env = await resolveWorkerEnv();
       expect(env?.FLARELOG_API_KEY).toBe("fl_from_binding");
     });
 
     it("caches the Worker env across calls within the same isolate", async () => {
-      __currentEvent = {
-        cloudflare: { env: { FLARELOG_API_KEY: "fl_cached" } },
-      };
+      __cfEnv = { FLARELOG_API_KEY: "fl_cached" };
       __resetAutoLoggerCache();
 
       const first = await resolveWorkerEnv();
-      // Mutate the event — second call should still return the cached value.
-      __currentEvent = { cloudflare: { env: { FLARELOG_API_KEY: "fl_changed" } } };
+      // Mutate the binding — second call should still return the cached value.
+      __cfEnv = { FLARELOG_API_KEY: "fl_changed" };
       const second = await resolveWorkerEnv();
 
       expect(first?.FLARELOG_API_KEY).toBe("fl_cached");

@@ -4,7 +4,9 @@ Zero-config logging for TanStack Start applications. Automatically capture reque
 
 TanStack Start does **not** expose an `app.use(...)` API. FlareLog integrates via TanStack Start's `createMiddleware()` from `@tanstack/react-start`. Register the middleware globally, per-route, or per server function.
 
-> **Deploying to Lovable / Cloudflare Workers?** The zero-config form below just works — the SDK auto-detects the runtime and reads secrets from the Worker `env` binding. See the [Lovable platform guide](/platforms/lovable) for full setup.
+> **Deploying to Lovable / Cloudflare Workers?** The zero-config form below just works — the SDK auto-detects the runtime and reads secrets from `process.env` (populated per-request by `@cloudflare/vite-plugin` when `nodejs_compat` is enabled) or the `cloudflare:workers` `env` binding. See the [Lovable platform guide](/platforms/lovable) for full setup.
+
+> **Compatibility:** Requires `@tanstack/react-start` >= 1.0.0 (stable). The integration is verified against v1.168.x. The legacy `getRequestEvent()` API was removed before the v1 stable release and is no longer used.
 
 ## Quick Start
 
@@ -22,11 +24,14 @@ export const startInstance = createStart(() => ({
 
 The SDK auto-detects the runtime and reads `FLARELOG_API_KEY` from:
 
-1. `process.env` — works on Node.js dev, Vercel, and Workers with
-   `nodejs_compat` enabled + plaintext `[vars]`.
-2. The Cloudflare Worker `env` binding on the request event (looked up via
-   `getRequestEvent()` from `@tanstack/react-start`) — works on Cloudflare Workers, including
-   **Lovable preview and production builds**.
+1. `process.env` — works on Node.js dev, Vercel, and Cloudflare Workers with
+   `nodejs_compat` enabled. On TanStack Start v1 + Workers, `@cloudflare/vite-plugin`
+   populates `process.env` per-request inside middleware `.server()` callbacks,
+   so this is the primary path even on edge runtimes.
+2. The `cloudflare:workers` `env` binding — read via `import { env } from "cloudflare:workers"`.
+   The canonical Cloudflare-runtime module; works whether or not `nodejs_compat`
+   is enabled. This is the fallback for Workers / **Lovable preview and production**
+   when `process.env` is not populated.
 
 It also auto-sets `workerMode: true` on Workers (so logs flush on every event
 instead of waiting for a 5s timer that never fires) and calls
@@ -58,13 +63,14 @@ export const startInstance = createStart(() => ({
 import { createStart } from "@tanstack/react-start";
 import { flarelog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
-import { getRequestEvent } from "@tanstack/react-start";
+import { env } from "cloudflare:workers";
 
 export const startInstance = createStart(() => ({
   requestMiddleware: [
     tanstackStartMiddleware(() => {
-      const event = getRequestEvent() as any;
-      const env = event?.cloudflare?.env ?? process.env;
+      // `env` here is the Worker binding (typed by `wrangler types` output).
+      // On Node/Vercel the import throws — guard with try/catch or use
+      // process.env directly there.
       return flarelog({
         apiKey: env.FLARELOG_API_KEY,
         workerMode: true,
@@ -204,12 +210,12 @@ Every request is logged with:
 - **Method**: HTTP method (GET, POST, etc.)
 - **Path**: Request URL pathname
 - **Duration**: Request duration in milliseconds
-- **Status** (when available): TanStack Start exposes status setters
-  (`setResponseStatus`) but not a status reader from within request
-  middleware. When the `next()` result carries a numeric `status`, it is used
-  for log-level mapping; otherwise completion logs at INFO.
+- **Status**: Read from `result.response.status` (the v1 `RequestServerResult`
+  shape is `{ request, pathname, context, response }`). When `next()` returns
+  a raw `Response` directly (short-circuit case), `result.status` is used
+  instead. When no status can be extracted, the log defaults to INFO.
 
-### Log Levels by Status Code (when status is available)
+### Log Levels by Status Code
 
 | Status Range | Log Level |
 |-------------|-----------|
