@@ -37,6 +37,27 @@ It also auto-sets `workerMode: true` on Workers (so logs flush on every event
 instead of waiting for a 5s timer that never fires) and calls
 `logger.flush()` after each request so the Worker doesn't suspend mid-export.
 
+#### Env resolution matrix — does it work with `.env` / Cloudflare secrets / both?
+
+**Both.** The SDK resolves `FLARELOG_API_KEY` (and all `FLARELOG_*` /
+`OTEL_*` vars) from the first source that has the key, in this exact order:
+
+| Priority | Source | Where it works | How to set it |
+|----------|--------|----------------|---------------|
+| 1 (highest) | Explicit `env` arg to `autoLogger(env)` or the factory | Everywhere | Pass `c.env` (Hono), `context.env` (Pages), or your own record |
+| 2 | `process.env.FLARELOG_API_KEY` | Node dev, Vercel, Cloudflare Workers **with `nodejs_compat`** | `.env` file (local), dashboard env vars (Vercel), `[vars]` in `wrangler.jsonc` (Workers) |
+| 3 | `cloudflare:workers` `env` binding | Cloudflare Workers **without `nodejs_compat`**, Lovable | Cloudflare dashboard secrets, Lovable secrets panel |
+| 4 (fallback) | Nothing found → console-only + `console.warn` | — | — |
+
+**Concrete answers to common questions:**
+
+- **"Does it work with just `.env`?"** — Yes, on Node dev / Vercel / Workers with `nodejs_compat`. Put `FLARELOG_API_KEY=fl_xxx` in `.env` and you're done.
+- **"Does it work with just Cloudflare secrets?"** — Yes, on Workers (with or without `nodejs_compat`). Add `FLARELOG_API_KEY` in the Cloudflare dashboard or `wrangler secret put FLARELOG_API_KEY`. The SDK reads it via the `cloudflare:workers` `env` binding.
+- **"Does it work with both?"** — Yes. Priority is: explicit arg > `process.env` > `cloudflare:workers` binding. If both are set, `process.env` wins (because it's checked first and cached).
+- **"What if neither is set?"** — The SDK logs a `console.warn` once per logger instance ("No backend configured — falling back to console-only logging") and ships nothing. Silence it with `flarelog({ warnOnConsoleFallback: false })`.
+
+This matrix is enforced by `tests/env-matrix.test.ts` — if the resolution order changes, the test fails.
+
 > Deploying to Lovable? See the [Lovable platform guide](/platforms/lovable)
 > for step-by-step setup.
 

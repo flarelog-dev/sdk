@@ -55,6 +55,8 @@ jobs:
 
       - name: Run tests
         run: npm test
+      - name: Run smoke testing
+        run: npm run test:smoke
 
       - name: Upload coverage
         if: matrix.node-version == 22
