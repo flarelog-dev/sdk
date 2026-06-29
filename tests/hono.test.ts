@@ -3,10 +3,15 @@ import { FlareLog } from "../src/client";
 import { mockFetch, wasFetchCalledForUrl } from "./helpers";
 import { __resetAutoLoggerCache } from "../src/frameworks/auto-logger";
 
-// Mock @tanstack/react-start so the auto-logger can find a Worker env binding in tests.
-let __currentEvent: unknown = null;
-vi.mock("@tanstack/react-start", () => ({
-  getRequestEvent: () => __currentEvent,
+// Mock `cloudflare:workers` (a runtime-provided module on Workers).
+// Tests set `__cfEnv` to simulate Worker env bindings. On Node/Bun the real
+// `import("cloudflare:workers")` throws synchronously — the auto-logger
+// catches that and falls back to process.env / the explicit `c.env` arg.
+let __cfEnv: Record<string, string | undefined> | null = null;
+vi.mock("cloudflare:workers", () => ({
+  get env() {
+    return __cfEnv;
+  },
 }));
 
 import { honoMiddleware } from "../src/frameworks/hono";
@@ -55,7 +60,7 @@ describe("honoMiddleware", () => {
   beforeEach(() => {
     fetchMock = mockFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    __currentEvent = null;
+    __cfEnv = null;
     __resetAutoLoggerCache();
     delete process.env.FLARELOG_API_KEY;
   });
@@ -187,7 +192,7 @@ describe("honoMiddleware — zero-arg auto mode", () => {
   beforeEach(() => {
     fetchMock = mockFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    __currentEvent = null;
+    __cfEnv = null;
     __resetAutoLoggerCache();
     delete process.env.FLARELOG_API_KEY;
   });

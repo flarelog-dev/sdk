@@ -19,8 +19,10 @@ export const startInstance = createStart(() => ({
 ```
 
 That's it. The SDK auto-detects Cloudflare Workers, reads `FLARELOG_API_KEY`
-from the Worker `env` binding (not `process.env`, which is empty on Workers),
-forces `workerMode: true` so logs flush on every event, and calls
+from `process.env` (populated per-request by `@cloudflare/vite-plugin` when
+`nodejs_compat` is enabled) or the `cloudflare:workers` `env` binding (the
+canonical Workers pattern, works without `nodejs_compat`), forces
+`workerMode: true` so logs flush on every event, and calls
 `logger.flush()` after each request so the Worker doesn't suspend mid-export.
 
 ## Why this needs special handling
@@ -28,11 +30,15 @@ forces `workerMode: true` so logs flush on every event, and calls
 Lovable's new stack runs your app as a single Cloudflare Worker. Two runtime
 characteristics matter:
 
-1. **Secrets are bindings, not env vars.** Lovable stores your `FLARELOG_API_KEY`
-   in its dashboard and injects it as a Worker binding at request time. It is
-   **not** present on `process.env` at module load. The SDK works around this
-   by reading the binding off the request event via `getRequestEvent()` from
-   `@tanstack/react-start` — automatically, on the first request.
+1. **Secrets are bindings, not module-load env vars.** Lovable stores your
+   `FLARELOG_API_KEY` in its dashboard and injects it as a Worker binding at
+   request time. It is **not** present on `process.env` at module load. The SDK
+   resolves it lazily, on the first request, via either:
+   - `process.env` — populated per-request inside middleware `.server()`
+     callbacks by `@cloudflare/vite-plugin` (requires `nodejs_compat`)
+   - `import { env } from "cloudflare:workers"` — the canonical Cloudflare
+     runtime module (works without `nodejs_compat`)
+   The SDK tries both and caches the result for the lifetime of the isolate.
 2. **The Worker is short-lived.** Without `workerMode: true`, the SDK uses the
    default Node-style batch processor (`batchSize: 50`, `flushIntervalMs: 5000`).
    The Worker will be suspended before the timer fires, dropping all buffered
@@ -145,21 +151,24 @@ tanstackStartMiddleware(() => flarelog({ debug: true }))
 ```
 
 If you see only `ConsoleTransport` in the debug output, the `env` lookup
-failed. The auto-mode tries `event.cloudflare.env` and
-`event.context.cloudflare.env`; if your adapter uses a different shape, log
-`Object.keys(getEvent() ?? {})` once on the first request to find the right
-path, then use the factory form:
+failed. The auto-mode probes `process.env` and the `cloudflare:workers`
+`env` binding; if your setup uses a different shape, log
+`Object.keys((await import("cloudflare:workers")).env ?? {})` once on the
+first request to find the right path, then use the factory form:
 
 ```typescript
-import { getRequestEvent } from "@tanstack/react-start";
 import { flarelog } from "@flarelog/sdk";
 import { tanstackStartMiddleware } from "@flarelog/sdk/tanstack-start";
 
 tanstackStartMiddleware(() => {
-  const event = getRequestEvent() as any;
-  return flarelog({ apiKey: event?.myAdapter?.env?.FLARELOG_API_KEY });
-})
+  // For non-Cloudflare setups: read your custom env source here.
+  return flarelog({ apiKey: process.env.MY_CUSTOM_FLARELOG_KEY });
+});
 ```
+
+For Cloudflare Workers / Lovable, prefer the zero-arg form — the SDK handles
+both `process.env` (with `nodejs_compat`) and `cloudflare:workers` (without)
+automatically.
 
 ### Logs appear in dev but not in preview
 

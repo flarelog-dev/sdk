@@ -4,88 +4,108 @@ import { detectRuntime } from "../otel/env";
 
 // ─── Worker env binding detection ───────────────────────────────────────────
 //
-// On Cloudflare Workers (incl. Lovable, Hono-on-Workers, etc.), secrets arrive
-// as `env` bindings on the request event, NOT on `process.env`. The binding
-// shape varies between adapter versions, so we probe the known paths and cache
-// the result.
+// On Cloudflare Workers (incl. Lovable, Hono-on-Workers, TanStack Start on
+// Workers), secrets arrive as `env` bindings — NOT on `process.env` at module
+// load. The SDK resolves them lazily, on the first request, from one of:
 //
-// TanStack Start v1 exposes the current request event via
-// `getRequestEvent()` from `@tanstack/react-start`. We probe that API and,
-// if missing, fall back to an empty result so the SDK stays zero-dependency
-// and never pulls in unstable deep dependencies such as `vinxi/http`.
+//   1. `process.env` — works on Node, Vercel, and Cloudflare Workers with
+//      `nodejs_compat` enabled. TanStack Start v1 + `@cloudflare/vite-plugin`
+//      populates `process.env` per-request inside middleware `.server()`
+//      callbacks, so this is the primary path even on Workers.
+//   2. The `cloudflare:workers` module — the Cloudflare-canonical way to read
+//      bindings from module scope on Workers. We probe it lazily so the SDK
+//      stays zero-dependency on Node/Vercel (the import is a no-op there).
+//   3. An explicit `env` arg — for frameworks that expose the binding on the
+//      request context (Hono's `c.env`, `pagesFunction`'s `context.env`, …).
+//
+// We intentionally do NOT use `getRequestEvent()` from `@tanstack/react-start`:
+// it was removed before the v1 stable release and is not exported by
+// `@tanstack/react-start` >= 1.0.0. See the framework guide for the canonical
+// v1 patterns.
 
 type EnvRecord = Record<string, string | undefined>;
 
-let _getEventFn: (() => unknown) | null | undefined;
+let _cloudflareEnv: EnvRecord | null | undefined;
 let _cachedWorkerEnv: EnvRecord | null = null;
 
-async function tryLoadGetEvent(): Promise<(() => unknown) | null> {
-  if (_getEventFn !== undefined) return _getEventFn;
+/**
+ * Lazily probe `cloudflare:workers` and return its `env` bindings.
+ *
+ * - On Cloudflare Workers (with or without `nodejs_compat`), this is the
+ *   canonical way to read bindings from module scope. The module is provided
+ *   by the Workers runtime and is always available there.
+ * - On Node / Vercel / Bun / Deno, the dynamic `import("cloudflare:workers")`
+ *   throws synchronously (the module does not exist). We catch and cache `null`
+ *   so subsequent calls are free.
+ *
+ * The result is cached for the lifetime of the isolate. On a Worker, that
+ * means it's cached per-Worker-instance (which is what we want — bindings
+ * don't change at runtime).
+ */
+async function tryLoadCloudflareEnv(): Promise<EnvRecord | null> {
+  if (_cloudflareEnv !== undefined) return _cloudflareEnv;
 
-  // Try TanStack Start v1 API (getRequestEvent from @tanstack/react-start).
   try {
-    const mod = (await import("@tanstack/react-start")) as unknown as {
-      getRequestEvent?: () => unknown;
+    // `cloudflare:workers` is a runtime-provided module on Workers.
+    // The dynamic import keeps the SDK zero-dependency on Node and lets
+    // bundlers tree-shake this path away for non-Worker builds.
+    const mod = (await import("cloudflare:workers")) as {
+      env?: EnvRecord;
     };
-    if (mod.getRequestEvent) {
-      _getEventFn = mod.getRequestEvent;
-      return _getEventFn;
-    }
+    _cloudflareEnv = mod.env ?? null;
+    return _cloudflareEnv;
   } catch {
-    /* ignore — module not installed */
+    // Not on Cloudflare Workers — module doesn't exist. Cache the miss.
+    _cloudflareEnv = null;
+    return _cloudflareEnv;
   }
-
-  // No fallback to `vinxi/http` — it is a pre-release deep dependency of
-  // TanStack Start v1 and is not guaranteed to be installed. Returning null
-  // lets resolveWorkerEnv fall back to process.env or an explicit key.
-  _getEventFn = null;
-  return _getEventFn;
-}
-
-function extractEnvFromEvent(event: unknown): EnvRecord | null {
-  if (!event || typeof event !== "object") return null;
-  const e = event as {
-    cloudflare?: { env?: EnvRecord };
-    context?: { cloudflare?: { env?: EnvRecord } };
-    env?: EnvRecord;
-  };
-  return e.cloudflare?.env ?? e.context?.cloudflare?.env ?? e.env ?? null;
 }
 
 /**
  * Resolve a FlareLog API key (and friends) from wherever they live on the
  * current runtime. Resolution order:
- *   1. `process.env` — Node, Vercel, Workers with `nodejs_compat` + plaintext vars
- *   2. The Cloudflare Worker `env` binding on the current request event
- *     (looked up via `getRequestEvent()` from `@tanstack/react-start`)
+ *
+ *   1. `process.env` — Node, Vercel, Cloudflare Workers with `nodejs_compat`.
+ *      On TanStack Start v1 + Workers, `@cloudflare/vite-plugin` populates
+ *      `process.env` per-request inside `.server()` callbacks, so this is the
+ *      primary path even on edge runtimes.
+ *   2. The Cloudflare Worker `env` binding — read via `import { env } from
+ *      "cloudflare:workers"`. The canonical Workers pattern, works whether or
+ *      not `nodejs_compat` is enabled.
  *
  * Returns `null` if nothing was found, so the caller can decide whether to
  * fall back to console-only logging.
+ *
+ * @param env Optional explicit env record (e.g. Hono's `c.env`). When passed,
+ *   it takes precedence over both `process.env` and the `cloudflare:workers`
+ *   binding — this is the fastest and most reliable path.
  */
-export async function resolveWorkerEnv(): Promise<EnvRecord | null> {
-  // 1. process.env (cheap, sync, works on Node/Vercel)
+export async function resolveWorkerEnv(
+  env?: EnvRecord | null,
+): Promise<EnvRecord | null> {
+  // 0. Explicit env arg (Hono's `c.env`, `pagesFunction`'s `context.env`, …)
+  if (env && env.FLARELOG_API_KEY) return env;
+
+  // 1. process.env — cheap, sync, works on Node/Vercel/Workers-with-nodejs_compat.
+  //    On TanStack Start v1 + Workers, this is populated per-request inside
+  //    middleware `.server()` callbacks by @cloudflare/vite-plugin.
   try {
     const proc = (globalThis as { process?: { env?: EnvRecord } }).process;
     if (proc?.env?.FLARELOG_API_KEY) return proc.env;
   } catch {
-    /* ignore */
+    /* ignore — process is undefined on some runtimes */
   }
 
   // 2. Cache hit from a previous request on this Worker isolate
   if (_cachedWorkerEnv) return _cachedWorkerEnv;
 
-  // 3. Try to pull the binding off the current request event
-  const getEvent = await tryLoadGetEvent();
-  if (!getEvent) return null;
-  try {
-    const env = extractEnvFromEvent(getEvent());
-    if (env) {
-      _cachedWorkerEnv = env;
-      return env;
-    }
-  } catch {
-    /* getEvent() throws outside a request — ignore */
+  // 3. Cloudflare Workers `env` binding via the `cloudflare:workers` module
+  const cfEnv = await tryLoadCloudflareEnv();
+  if (cfEnv?.FLARELOG_API_KEY) {
+    _cachedWorkerEnv = cfEnv;
+    return cfEnv;
   }
+
   return null;
 }
 
@@ -102,7 +122,8 @@ function parseHeaders(raw: string): Record<string, string> {
 /**
  * Build a FlareLog instance pre-configured for the current runtime. Detects
  * Cloudflare Workers (incl. Lovable, Hono-on-Workers) automatically and:
- *   - reads `FLARELOG_*` secrets from the Worker `env` binding
+ *   - reads `FLARELOG_*` secrets from `process.env`, the `cloudflare:workers`
+ *     `env` binding, or an explicit `env` arg (in that order)
  *   - forces `workerMode: true` (flush on every event, no 5s timer)
  *
  * **When to call this:** inside a request handler, NOT at module load. The
@@ -110,7 +131,7 @@ function parseHeaders(raw: string): Record<string, string> {
  *
  * **Passing `env` explicitly:** if your framework exposes the Worker `env` on
  * the request context (Hono's `c.env`, `pagesFunction`'s `context.env`, etc.),
- * pass it here — that's faster and more reliable than probing `getEvent()`.
+ * pass it here — that's faster and more reliable than probing.
  *
  * @example TanStack Start / generic — auto-detect env source
  * ```ts
@@ -133,7 +154,7 @@ export async function autoLogger(
   const runtime = detectRuntime();
   const isWorker =
     runtime === "cloudflare-workers" || runtime === "vercel";
-  const resolved = env ?? (await resolveWorkerEnv()) ?? {};
+  const resolved = (await resolveWorkerEnv(env)) ?? {};
 
   return flarelog({
     apiKey: resolved.FLARELOG_API_KEY,
@@ -155,6 +176,6 @@ export async function autoLogger(
  * Not part of the public API — may be removed in any release.
  */
 export function __resetAutoLoggerCache(): void {
-  _getEventFn = undefined;
+  _cloudflareEnv = undefined;
   _cachedWorkerEnv = null;
 }
