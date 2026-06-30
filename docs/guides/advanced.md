@@ -1,5 +1,9 @@
 # FlareLog SDK - Advanced Features
 
+Deep-dive into FlareLog's advanced capabilities: breadcrumbs, PII scrubbing, child loggers, sampling, `beforeSend` hooks, custom spans, and multi-backend fan-out. These features work identically across all runtimes (Node, Workers, Edge, browser).
+
+> **Just getting started?** See [Installation](/getting-started/installation) first — this guide assumes you already have a working logger.
+
 ## Breadcrumbs
 
 Breadcrumbs track events leading up to an error, providing context for debugging.

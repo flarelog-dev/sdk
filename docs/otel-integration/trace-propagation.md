@@ -22,14 +22,17 @@ FlareLog automatically extracts W3C trace context from incoming requests:
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY });
-
 export default {
-  fetch: workerFetch(logger, async (request, env, ctx) => {
-    // If request has traceparent header, logs are automatically correlated
-    logger.info("Processing request"); // inherits traceId from header
-    return new Response("OK");
-  }),
+  fetch: workerFetch(
+    // Create the logger INSIDE the handler — `env` is not available at module
+    // scope on Workers.
+    flarelog(),
+    async (request, env, ctx) => {
+      // If request has traceparent header, logs are automatically correlated
+      // The logger from workerFetch's scope inherits the traceId from the header
+      return new Response("OK");
+    },
+  ),
 };
 ```
 

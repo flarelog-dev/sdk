@@ -1,5 +1,9 @@
 # FlareLog SDK - Browser Guide
 
+Client-side logging for React, Vue, Svelte, and vanilla JS apps. Ship browser errors, breadcrumbs, and user actions to FlareLog. Pair with a server-side integration (Next.js, Express, Hono, etc.) for full-stack tracing with W3C trace context propagation.
+
+> **Using React?** See the [React integration](/frameworks/nextjs#client-side-logging-in-the-browser) for `FlareLogErrorBoundary` and `useFlareLog` hook docs. This guide covers the broader browser setup.
+
 ## Quick Start (3 lines)
 
 ```typescript

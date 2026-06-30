@@ -23,11 +23,12 @@ export default defineConfig({
     logo: '/logo.svg',
 
     nav: [
+      { text: 'Getting Started', link: '/getting-started/installation' },
       { text: 'Core API', link: '/core-api/' },
       { text: 'Guides', link: '/guides/browser' },
       { text: 'Platforms', link: '/platforms/cloudflare-workers' },
       { text: 'Frameworks', link: '/frameworks/nextjs' },
-      { text: 'OTel Integration', link: '/otel-integration/overview' },
+      { text: 'OTel', link: '/otel-integration/overview' },
       {
         text: 'v2.x',
         items: [
@@ -109,7 +110,7 @@ export default defineConfig({
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright (c) 2026 Chiheb Nabil / Remote Skills LTD',
+      copyright: 'Copyright (c) 2025 Chiheb Nabil / Remote Skills LTD',
     },
 
     search: {
@@ -142,5 +143,4 @@ export default defineConfig({
   },
 
   outDir: '../dist-docs',
-  ignoreDeadLinks: true,
 })

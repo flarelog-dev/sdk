@@ -6,7 +6,15 @@ TanStack Start does **not** expose an `app.use(...)` API. FlareLog integrates vi
 
 > **Deploying to Lovable / Cloudflare Workers?** The zero-config form below just works — the SDK auto-detects the runtime and reads secrets from `process.env` (populated per-request by `@cloudflare/vite-plugin` when `nodejs_compat` is enabled) or the `cloudflare:workers` `env` binding. See the [Lovable platform guide](/platforms/lovable) for full setup.
 
-> **Compatibility:** Requires `@tanstack/react-start` >= 1.0.0 (stable). The integration is verified against v1.168.x. The legacy `getRequestEvent()` API was removed before the v1 stable release and is no longer used.
+> **Compatibility:** Requires `@tanstack/react-start` >= 1.0.0 (stable). The integration is verified against v1.168.x.
+
+## Installation
+
+```bash
+npm install @flarelog/sdk @tanstack/react-start
+```
+
+`@tanstack/react-start` is a peer dependency — install it if you haven't already.
 
 ## Quick Start
 
@@ -106,12 +114,6 @@ export const startInstance = createStart(() => ({
 > with `createMiddleware()`. The `as never` cast may be needed depending on
 > your `createStart` type parameters; if your TS setup infers the builder type
 > directly, omit it.
-
-## Installation
-
-```bash
-npm install @flarelog/sdk @tanstack/react-start
-```
 
 ## Middleware Setup
 
@@ -314,9 +316,13 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-0.grafana.net
 OTEL_RESOURCE_ATTRIBUTES=service.name=my-app
 ```
 
-> On Cloudflare Workers / Lovable, do **not** rely on `process.env`. Add the
-> secrets in your platform's dashboard and read them from the request event.
-> See [Lazy logger on Workers / Lovable](#lazy-logger-on-workers-lovable).
+> On Cloudflare Workers / Lovable, do **not** rely on `process.env` at module
+> load — the `env` binding is only available inside request handlers. Add the
+> secrets in your platform's dashboard and use the zero-arg
+> `tanstackStartMiddleware()` form (which auto-reads the `cloudflare:workers`
+> `env` binding on the first request) or the factory form shown in
+> [Quick Start](#factory-full-custom-control-eg-multi-tenant-custom-env-source).
+> See the [Lovable platform guide](/platforms/lovable) for step-by-step setup.
 
 ```typescript
 // app.config.ts
@@ -370,18 +376,3 @@ TypeScript resolves the middleware builder types against the real package.
 The SDK exports a loosely-typed return from `tanstackStartMiddleware` so it
 composes with `createStart`, `createFileRoute`, and `createServerFn`
 middleware arrays without forcing a specific builder type.
-
-## Migration from `withTanStackStart`
-
-The previous `withTanStackStart(logger, handler)` wrapper was built against an
-`app.use`-style API that TanStack Start does not provide. It is now a
-deprecated stub that throws on invocation. Migrate to:
-
-```typescript
-createServerFn()
-  .middleware([tanstackStartMiddleware(logger) as never])
-  .handler(async ({ context }) => {
-    context.logger.info("Processing");
-    return /* ... */;
-  });
-```

@@ -176,7 +176,11 @@ The wrappers themselves do not read framework-specific env vars, but `flarelog()
 | `FLARELOG_SERVER_NAME` | Host or instance name |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Fan-out to any OTLP-compatible backend |
 | `OTEL_EXPORTER_OTLP_HEADERS` | OTLP headers (`Key=Value`) |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | OTLP logs-only endpoint (overrides `OTEL_EXPORTER_OTLP_ENDPOINT` for logs) |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | OTLP traces-only endpoint (overrides `OTEL_EXPORTER_OTLP_ENDPOINT` for traces) |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | OTLP protocol (`http/protobuf` default) |
 | `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes (`service.name=foo`) |
+| `OTEL_SERVICE_NAME` | Override `service.name` (takes precedence over `OTEL_RESOURCE_ATTRIBUTES`) |
 
 Use `FLARELOG_API_KEY` in your server-side code. If you also log from the browser, create a separate client-side logger that reads a *public* API key from `NEXT_PUBLIC_*` variables.
 

@@ -1,5 +1,9 @@
 # FlareLog SDK - Node.js Guide
 
+Server-side logging for Node.js — Express, Fastify, NestJS, and raw HTTP servers. The SDK auto-detects Node.js, reads `process.env.FLARELOG_API_KEY` at module load (safe on Node), and uses a 5-second batch flush interval for high-throughput logging.
+
+> **Using Express?** See the [Express integration](/getting-started/installation#express-js) for the `expressMiddleware` + `expressErrorHandler` quick start. This guide covers broader Node.js patterns, custom servers, and advanced configuration.
+
 ## Quick Start (3 lines)
 
 ```typescript
