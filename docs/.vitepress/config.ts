@@ -110,7 +110,7 @@ export default defineConfig({
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright (c) 2025 Chiheb Nabil / Remote Skills LTD',
+      copyright: 'Copyright (c) 2026 Chiheb Nabil / Remote Skills LTD',
     },
 
     search: {
