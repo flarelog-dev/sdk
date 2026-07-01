@@ -12,9 +12,6 @@ hero:
     - theme: alt
       text: Choosing an Integration
       link: /getting-started/choosing-integration
-    - theme: alt
-      text: View on GitHub
-      link: https://github.com/flarelog-dev/sdk
 
 features:
   - icon: 🚀
