@@ -41,14 +41,17 @@ logger.logError(new Error("Payment failed"));
 
 ### Auto-Captured Breadcrumbs
 
-Enable auto-capture in config:
+> [!WARNING]
+> `autoCapture.http`, `autoCapture.navigation`, and `autoCapture.clicks` are **not yet implemented**. The options are accepted by the type system but have no effect at runtime. Use manual `addBreadcrumb()` calls in the meantime. `console`, `globalErrors`, and `rejections` capture work as expected.
+
+The following auto-capture options are **fully implemented**:
 
 ```typescript
 const logger = new FlareLog({
   autoCapture: {
-    http: true,        // fetch/XHR calls
-    navigation: true,  // page navigation
-    clicks: true,      // DOM clicks
+    console: true,      // intercept console.error / console.warn
+    globalErrors: true, // window.onerror / process uncaughtException
+    rejections: true,   // unhandledrejection
   },
 });
 ```
@@ -384,9 +387,8 @@ const logger = new FlareLog({
   // Optional
   endpoint: "https://flarelog.dev",
   level: "DEBUG",
-  // Note: batchSize is accepted but not currently wired into the processors
-  batchSize: 10,
-  flushIntervalMs: 5000,
+  batchSize: 10,           // flush after N logs. Default: 50 (Node), 1 (Worker/Edge)
+  flushIntervalMs: 5000,  // also flush on a timer. Default: 5000ms (Node), 0 (Worker)
   // workerMode: true, // Use SimpleProcessor; recommended for Workers/edge runtimes
   debug: false,
   defaultSource: "",
@@ -400,15 +402,12 @@ const logger = new FlareLog({
   // Sampling
   sampleRate: 1.0,
   
-  // Auto-capture (console, globalErrors, rejections are implemented;
-  // http, navigation, and clicks are accepted but not yet implemented)
+  // Auto-capture
+  // NOTE: http, navigation, and clicks are NOT YET IMPLEMENTED — omit them.
   autoCapture: {
     console: { levels: ["error", "warn"], source: "console" },
     globalErrors: true,
     rejections: true,
-    // http: true,
-    // navigation: true,
-    // clicks: true,
     dedupWindowMs: 5000,
   },
   

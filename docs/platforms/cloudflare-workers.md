@@ -287,11 +287,6 @@ export default {
 ```typescript
 import { FlareLog } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  environment: "production",
-});
-
 export default {
   async queue(batch: MessageBatch, env: Env, ctx: ExecutionContext) {
     const logger = new FlareLog({
@@ -329,13 +324,13 @@ export default {
 ```typescript
 import { FlareLog } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  environment: "production",
-});
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const logger = new FlareLog({
+      apiKey: env.FLARELOG_API_KEY,
+      environment: "production",
+    });
+
     return logger.withRequest(
       { request, traceId: crypto.randomUUID() },
       ctx,
@@ -368,13 +363,12 @@ export default {
 ```typescript
 import { FlareLog } from "@flarelog/sdk";
 
-const logger = new FlareLog({
-  apiKey: "fl_your_api_key",
-  environment: "production",
-});
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const logger = new FlareLog({
+      apiKey: env.FLARELOG_API_KEY,
+      environment: "production",
+    });
     const traceId = crypto.randomUUID();
     const log = logger.child({ traceId, source: "kv-handler" });
     

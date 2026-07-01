@@ -7,29 +7,29 @@ Not sure which FlareLog integration to use? This guide will help you decide.
 ```
 Are you using a framework?
 ├── Yes
-│   ├── Express    → @flarelog/sdk/express
-│   ├── Hono       → @flarelog/sdk/hono
-│   ├── Next.js    → @flarelog/sdk/next
-│   ├── React      → @flarelog/sdk/react
-│   └── TanStack   → @flarelog/sdk/tanstack-start
+│   ├── [Express](/frameworks/express)    → `@flarelog/sdk/express`
+│   ├── [Hono](/frameworks/hono)       → `@flarelog/sdk/hono`
+│   ├── [Next.js](/frameworks/nextjs)    → `@flarelog/sdk/next`
+│   ├── [React](/guides/browser)      → `@flarelog/sdk/react`
+│   └── [TanStack](/frameworks/tanstack-start)   → `@flarelog/sdk/tanstack-start`
 └── No (plain handler)
-    ├── Cloudflare Workers → @flarelog/sdk/cf-workers
-    ├── Vercel Serverless  → @flarelog/sdk/vercel (withVercelServerless)
-    ├── Vercel Edge        → @flarelog/sdk/vercel (withVercelEdge)
-    └── Node.js / other    → @flarelog/sdk (core)
+    ├── [Cloudflare Workers](/platforms/cloudflare-workers) → `@flarelog/sdk/cf-workers`
+    ├── [Vercel Serverless](/platforms/vercel)  → `@flarelog/sdk/vercel (withVercelServerless)`
+    ├── [Vercel Edge](/platforms/vercel)        → `@flarelog/sdk/vercel (withVercelEdge)`
+    └── [Node.js / other](/guides/nodejs)    → `@flarelog/sdk` (core)
 ```
 
 ## Integration Reference
 
 | Your stack | Import | What you get |
 |---|---|---|
-| **Express** | `@flarelog/sdk/express` | `expressMiddleware` + `expressErrorHandler`, `req.logger` |
-| **Hono** | `@flarelog/sdk/hono` | `honoMiddleware`, `c.get("logger")` |
-| **Next.js** (API routes) | `@flarelog/sdk/next` | `withFlareLog`, `req.logger` + `req.traceId` |
-| **React** (browser) | `@flarelog/sdk/react` | `FlareLogErrorBoundary`, `useFlareLog` hook |
-| **TanStack Start** | `@flarelog/sdk/tanstack-start` | Server function + client wrappers |
-| **Cloudflare Workers** (plain) | `@flarelog/sdk/cf-workers` | `workerFetch`, full OTel spans, `ctx.waitUntil` flush |
-| **Vercel** (standalone API, Edge, Middleware) | `@flarelog/sdk/vercel` | `withVercelServerless` + `withVercelEdge` |
+| **[Express](/frameworks/express)** | `@flarelog/sdk/express` | `expressMiddleware` + `expressErrorHandler`, `req.logger` |
+| **[Hono](/frameworks/hono)** | `@flarelog/sdk/hono` | `honoMiddleware`, `c.get("logger")` |
+| **[Next.js](/frameworks/nextjs)** (API routes) | `@flarelog/sdk/next` | `withFlareLog`, `req.logger` + `req.traceId` |
+| **[React](/guides/browser)** (browser) | `@flarelog/sdk/react` | `FlareLogErrorBoundary`, `useFlareLog` hook |
+| **[TanStack Start](/frameworks/tanstack-start)** | `@flarelog/sdk/tanstack-start` | Server function + client wrappers |
+| **[Cloudflare Workers](/platforms/cloudflare-workers)** (plain) | `@flarelog/sdk/cf-workers` | `workerFetch`, full OTel spans, `ctx.waitUntil` flush |
+| **[Vercel](/platforms/vercel)** (standalone API, Edge, Middleware) | `@flarelog/sdk/vercel` | `withVercelServerless` + `withVercelEdge` |
 | **No framework / custom** | `@flarelog/sdk` | Core `flarelog()` factory, spans, `logError`, breadcrumbs |
 
 ## Common Confusion Points

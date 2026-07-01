@@ -287,6 +287,73 @@ Can also be set via OTEL_EXPORTER_OTLP_ENDPOINT env var.
 
 > `optional` **otlpHeaders?**: `Record`<`string`, `string`>
 
-Defined in: [types.ts:148](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L148)
+Defined in: [types.ts:168](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L168)
 
 Headers for the OTLP transport (e.g. Authorization). Shorthand for transports[0].headers.
+
+***
+
+### warnOnConsoleFallback?
+
+> `optional` **warnOnConsoleFallback?**: `boolean`
+
+Defined in: [types.ts:107](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L107)
+
+Warn to `console.warn` when the SDK falls back to `ConsoleTransport` because no backend is configured (i.e., `FLARELOG_API_KEY` and `OTEL_EXPORTER_OTLP_ENDPOINT` are both unset AND no explicit `transports` array was provided).
+
+- `true` (default): emit a one-time `console.warn` describing the fallback and how to fix it.
+- `false`: suppress the warning (for users who intentionally want console-only logging).
+
+The warning is emitted at most once per `FlareLog` instance.
+
+***
+
+### ignorePaths?
+
+> `optional` **ignorePaths?**: `Array`<`string` | `RegExp` | (`pathname`: `string`) => `boolean`>
+
+Defined in: [types.ts:202](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L202)
+
+Request path patterns to skip when wrapping handlers with `workerFetch()`, `pagesFunction()`, or `logger.withRequest()`.
+
+When the incoming request's URL pathname matches any entry, the SDK bypasses span creation, log emission, and end-of-request flush entirely — the handler runs as if the SDK weren't installed. This is the recommended way to keep browser-driven noise (e.g. `/favicon.ico`, `/robots.txt`, static-asset prefixes) out of your dashboard without touching your handler code.
+
+Each entry can be:
+- a string: matched if the pathname equals it (case-sensitive)
+- a RegExp: matched if `pattern.test(pathname)` returns true
+- a function: matched if `(pathname) => boolean` returns true
+
+Matching happens against `new URL(request.url).pathname` only — query string and host are ignored.
+
+***
+
+### scrubFields?
+
+> `optional` **scrubFields?**: `string[]`
+
+Defined in: [types.ts:140](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L140)
+
+Fields to scrub from metadata (PII redaction). When a key in `metadata` matches any entry in this array, its value is replaced with `"[REDACTED]"` before the log is exported.
+
+Defaults to common sensitive fields (e.g. `password`, `secret`, `token`, `authorization`).
+
+***
+
+### onDrop?
+
+> `optional` **onDrop?**: (`droppedCount`: `number`) => `void`
+
+Defined in: [types.ts:149](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L149)
+
+Callback invoked when logs are dropped due to buffer overflow (i.e. the in-flight queue exceeds `maxBatchSize`). Use this to track telemetry loss in your own metrics or alerting system.
+
+```typescript
+const logger = flarelog({
+  maxBatchSize: 100,
+  onDrop: (count) => {
+    console.warn(`FlareLog dropped ${count} log(s) due to buffer overflow`);
+  },
+});
+```
+
+***

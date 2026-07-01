@@ -25,13 +25,14 @@ export default defineConfig({
     nav: [
       { text: 'Getting Started', link: '/getting-started/installation' },
       { text: 'Core API', link: '/core-api/' },
-      { text: 'Guides', link: '/guides/browser' },
+      { text: 'Guides', link: '/guides/nodejs' },
       { text: 'Platforms', link: '/platforms/cloudflare-workers' },
-      { text: 'Frameworks', link: '/frameworks/nextjs' },
+      { text: 'Frameworks', link: '/frameworks/express' },
       { text: 'OTel', link: '/otel-integration/overview' },
       {
         text: 'v2.x',
         items: [
+          { text: 'Migration Guide', link: '/guides/migration' },
           { text: 'Changelog', link: 'https://github.com/flarelog-dev/sdk/releases' },
           { text: 'npm', link: 'https://www.npmjs.com/package/@flarelog/sdk' },
         ]
@@ -66,9 +67,10 @@ export default defineConfig({
         {
           text: 'Guides',
           items: [
-            { text: 'Browser', link: '/guides/browser' },
             { text: 'Node.js', link: '/guides/nodejs' },
+            { text: 'Browser', link: '/guides/browser' },
             { text: 'Advanced Features', link: '/guides/advanced' },
+            { text: 'Migration Guide (v1 to v2)', link: '/guides/migration' },
           ]
         }
       ],
@@ -86,6 +88,7 @@ export default defineConfig({
         {
           text: 'Frameworks',
           items: [
+            { text: 'Express', link: '/frameworks/express' },
             { text: 'Next.js', link: '/frameworks/nextjs' },
             { text: 'TanStack Start', link: '/frameworks/tanstack-start' },
             { text: 'Hono', link: '/frameworks/hono' },

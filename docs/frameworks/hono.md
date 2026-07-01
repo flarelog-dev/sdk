@@ -179,10 +179,8 @@ FLARELOG_ENVIRONMENT = "production"
 
 ## TypeScript Support
 
-Hono is an optional peer dependency. The SDK's `Context` type is inlined to
-avoid a hard dep — it covers the standard Hono context shape (`c.req`,
-`c.res`, `c.set`, `c.env`). If your Hono version uses a different shape,
-cast or use the factory form to construct your own logger.
+Hono is an optional peer dependency. The SDK's `Context` type is inlined to avoid a hard dep — it covers the standard Hono context shape (`c.req` for request details, `c.res` for the response status, `c.set` for setting variables, and `c.env` for environment bindings). If your Hono version uses a different shape, cast or use the factory form to construct your own logger.
+
 
 ## See also
 

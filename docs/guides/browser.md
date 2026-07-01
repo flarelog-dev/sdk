@@ -2,7 +2,7 @@
 
 Client-side logging for React, Vue, Svelte, and vanilla JS apps. Ship browser errors, breadcrumbs, and user actions to FlareLog. Pair with a server-side integration (Next.js, Express, Hono, etc.) for full-stack tracing with W3C trace context propagation.
 
-> **Using React?** See the [React integration](/frameworks/nextjs#client-side-logging-in-the-browser) for `FlareLogErrorBoundary` and `useFlareLog` hook docs. This guide covers the broader browser setup.
+> **Using React?** This is the right guide — it covers `FlareLogErrorBoundary` and the `useFlareLog` hook in detail. For Next.js server-side integration see the [Next.js guide](/frameworks/nextjs).
 
 ## Quick Start (3 lines)
 
@@ -28,7 +28,7 @@ The `flarelog()` factory auto-detects environment and enables console/globalErro
       console: true,
       globalErrors: true,
       rejections: true,
-      // Note: http, navigation, and clicks capture is not yet implemented
+      // http, navigation, and clicks capture is not yet implemented
     },
   });
   
@@ -42,6 +42,9 @@ The `flarelog()` factory auto-detects environment and enables console/globalErro
   logger.info("Page loaded", { url: window.location.href });
 </script>
 ```
+
+> [!WARNING]
+> `autoCapture.http`, `autoCapture.navigation`, and `autoCapture.clicks` are **not yet implemented**. They are accepted by the type system but silently do nothing. Use `console`, `globalErrors`, and `rejections` — those work as expected.
 
 ## React
 
