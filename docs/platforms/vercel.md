@@ -1,5 +1,9 @@
 # FlareLog SDK - Vercel Guide
 
+Drop-in wrappers for Vercel Serverless Functions (Node.js runtime), Edge Functions, and Edge Middleware. The SDK auto-detects the Vercel platform via `VERCEL_*` env vars, reads `process.env.FLARELOG_API_KEY` at module load (safe on Vercel), and flushes telemetry before the function invocation ends.
+
+> **Using Next.js on Vercel?** Use the [Next.js integration](/frameworks/nextjs) instead — it works on Vercel and any other hosting platform. This guide is for standalone `api/` routes, Edge Functions, and Middleware that don't use Next.js.
+
 ## Quick Start (3 lines)
 
 ### Serverless Functions (Node.js runtime)

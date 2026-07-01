@@ -18,36 +18,12 @@ Framework and platform integrations are included — no extra installs needed.
 | **Hono** | `@flarelog/sdk/hono` | `honoMiddleware`, `c.get("logger")` |
 | **Next.js** (API routes) | `@flarelog/sdk/next` | `withFlareLog`, `req.logger` + `req.traceId` |
 | **React** (browser) | `@flarelog/sdk/react` | `FlareLogErrorBoundary`, `useFlareLog` hook |
-| **TanStack Start** | `@flarelog/sdk/tanstack-start` | Server function + client wrappers |
+| **TanStack Start** | `@flarelog/sdk/tanstack-start` | Request middleware, auto Worker env detection |
 | **Cloudflare Workers** (plain) | `@flarelog/sdk/cf-workers` | `workerFetch`, full OTel spans, `ctx.waitUntil` flush |
 | **Vercel** (standalone API, Edge, Middleware) | `@flarelog/sdk/vercel` | `withVercelServerless` + `withVercelEdge` |
 | **No framework / custom** | `@flarelog/sdk` | Core `flarelog()` factory, spans, `logError`, breadcrumbs |
 
-### Not sure? Here's the decision flow:
-
-```
-Are you using a framework?
-├── Yes
-│   ├── Express    → @flarelog/sdk/express
-│   ├── Hono       → @flarelog/sdk/hono
-│   ├── Next.js    → @flarelog/sdk/next
-│   ├── React      → @flarelog/sdk/react
-│   └── TanStack   → @flarelog/sdk/tanstack-start
-└── No (plain handler)
-    ├── Cloudflare Workers → @flarelog/sdk/cf-workers
-    ├── Vercel Serverless  → @flarelog/sdk/vercel (withVercelServerless)
-    ├── Vercel Edge        → @flarelog/sdk/vercel (withVercelEdge)
-    └── Node.js / other    → @flarelog/sdk (core)
-```
-
-### Common confusion points
-
-- **"Next.js on Vercel"** → Use `@flarelog/sdk/next`. The Next.js integration works on any hosting platform; Vercel is just deployment.
-- **"React on Vercel"** → Use `@flarelog/sdk/react` for the client side, `@flarelog/sdk/next` for API routes.
-- **"Vercel without Next.js"** → Use `@flarelog/sdk/vercel` for standalone `api/` routes, Edge Functions, and Middleware.
-- **"Hono on Cloudflare Workers"** → Use `@flarelog/sdk/hono` for the middleware. Optionally pair with `@flarelog/sdk/cf-workers` for `workerFetch`.
-
-> **Rule of thumb**: Pick the **framework** integration first. Only reach for the **platform** integration (`cf-workers`, `vercel`) when you don't use a framework or need platform-specific features like OTel span auto-creation or execution-context flushing.
+> **Not sure which to pick?** See the full **[Choosing an Integration](/getting-started/choosing-integration)** guide — it has a decision tree, framework-vs-platform comparison, and common confusion points.
 
 ---
 
@@ -113,15 +89,19 @@ trackEvent("button_clicked", { button: "checkout" });
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({ apiKey: env.FLARELOG_API_KEY });
-
 export default {
-  fetch: workerFetch(logger, async (request, env, ctx) => {
-    logger.info("Hello from worker!");
-    return new Response("Hello");
-  }),
+  fetch: workerFetch(
+    // Create the logger INSIDE the handler — `env` is not available at module
+    // scope on Workers. See the Cloudflare Workers guide for details.
+    flarelog(),
+    async (request, env, ctx) => {
+      return new Response("Hello");
+    },
+  ),
 };
 ```
+
+> **⚠️ Workers anti-pattern:** Don't do `const logger = flarelog({ apiKey: env.FLARELOG_API_KEY })` at module scope — `env` is `undefined` there. Create the logger inside the `fetch` handler (as above), or use `autoLogger(env)` which reads `process.env` / the `cloudflare:workers` binding lazily. See the [Cloudflare Workers guide](/platforms/cloudflare-workers) for the full pattern.
 
 ### Vercel Serverless Functions
 
@@ -150,31 +130,6 @@ export default withVercelEdge(logger, async (request) => {
   return new Response("Hello from the edge!");
 });
 ```
-
----
-
-## Framework vs Platform Integrations
-
-Understanding the difference helps you pick the right one:
-
-| | Framework integrations | Platform integrations |
-|---|---|---|
-| **Examples** | `/express`, `/hono`, `/next`, `/react`, `/tanstack-start` | `/cf-workers`, `/vercel` |
-| **Tied to** | A web framework | A deployment runtime |
-| **Works on** | Any platform that runs the framework | Only the specific platform |
-| **What they do** | Attach logger to framework objects (`req.logger`, `c.get("logger")`) | OTel span creation, execution-context flushing, env detection |
-| **When to use** | You're using that framework (always preferred) | You're writing raw handlers without a framework |
-
-### Overlap examples
-
-| Scenario | Use | Reason |
-|---|---|---|
-| Next.js on Vercel | `/next` | Framework integration is the right abstraction |
-| Next.js on a VPS | `/next` | Same — framework integration is platform-agnostic |
-| Hono on Cloudflare Workers | `/hono` | Framework integration; Hono runs natively on Workers |
-| Plain Worker (no framework) | `/cf-workers` | Need platform-specific `workerFetch` + `ctx.waitUntil` |
-| Vercel API route (no Next.js) | `/vercel` | Need platform-specific Serverless/Edge wrappers |
-| Express on Vercel Serverless | `/express` | Framework integration; runs on Node.js under the hood |
 
 ---
 
@@ -215,8 +170,21 @@ const logger = flarelog({
 | `beforeSend` | function | - | Modify/drop logs before sending |
 | `autoCapture` | object | `{console, globalErrors, rejections}` | Auto-capture config |
 | `otlpEndpoint` | string | optional | OTLP endpoint (or set `OTEL_EXPORTER_OTLP_ENDPOINT`) |
-| `otlpHeaders` | object | optional | OTLP auth headers |
+| `otlpHeaders` | `Record<string,string>` | optional | OTLP auth headers |
 | `transports` | array | auto-detected | Explicit transport list |
+| `allowInsecure` | boolean | `false` | Allow HTTP (non-TLS) endpoints |
+| `debug` | boolean | `false` | Enable debug mode (verbose console output) |
+| `defaultSource` | string | `"flarelog"` | Default `source` field for logs |
+| `includeTimestamps` | boolean | `true` | Auto-add `timestamp` to log metadata |
+| `serviceName` | string | auto-detected | OTel `service.name` resource attribute |
+| `serviceNamespace` | string | optional | OTel `service.namespace` resource attribute |
+| `resourceAttributes` | `Record<string,string>` | optional | Extra OTel resource attributes |
+| `scrubFields` | `string[]` | `["password","token","secret","key","authorization"]` | Field names to redact from logs (substring match) |
+| `onDrop` | function | - | Called when a log is dropped (buffer full, sample miss, etc.) |
+| `warnOnConsoleFallback` | boolean | `true` | Warn when no backend is configured (console-only) |
+| `ignorePaths` | `(string \| RegExp \| ((path: string) => boolean))[]` | `[]` | Skip instrumentation for matching request paths |
+
+> See [Core API: Configuration](/core-api/configuration) for the full type reference.
 
 ## Log Levels
 

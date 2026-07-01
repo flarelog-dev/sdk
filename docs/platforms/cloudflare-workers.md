@@ -1,5 +1,9 @@
 # FlareLog SDK - Cloudflare Workers Guide
 
+Zero-config observability for Cloudflare Workers — including Workers Sites, Durable Objects, Queues, and Cron Triggers. The SDK auto-detects the Workers runtime, reads secrets from the `env` binding (not `process.env`), and flushes telemetry via `ctx.waitUntil()` so logs and traces aren't dropped when the Worker suspends.
+
+> **Using Hono or TanStack Start on Workers?** Use the [Hono](/frameworks/hono) or [TanStack Start](/frameworks/tanstack-start) framework integration instead — they handle the `env` binding automatically. This guide is for raw Workers handlers.
+
 ## Quick Start (3 lines)
 
 ```typescript
@@ -504,22 +508,24 @@ The SDK is behaving correctly — each request gets its own batch. The duplicati
 ```typescript
 import { flarelog, workerFetch } from "@flarelog/sdk";
 
-const logger = flarelog({
-  apiKey: env.FLARELOG_API_KEY,
-  ignorePaths: [
-    "/favicon.ico",        // browsers always fetch this
-    "/robots.txt",         // crawlers
-    "/sitemap.xml",
-    /^\/static\//,         // any static-asset prefix you serve
-    /^\/assets\//,
-  ],
-});
-
 export default {
-  fetch: workerFetch(logger, async (request, env, ctx) => {
-    // Your handler code — only runs instrumented for non-ignored requests
-    return new Response("Hello");
-  }),
+  fetch: workerFetch(
+    // Create the logger INSIDE the handler — `env` is not available at module
+    // scope on Workers.
+    flarelog({
+      ignorePaths: [
+        "/favicon.ico",        // browsers always fetch this
+        "/robots.txt",         // crawlers
+        "/sitemap.xml",
+        /^\/static\//,         // any static-asset prefix you serve
+        /^\/assets\//,
+      ],
+    }),
+    async (request, env, ctx) => {
+      // Your handler code — only runs instrumented for non-ignored requests
+      return new Response("Hello");
+    },
+  ),
 };
 ```
 

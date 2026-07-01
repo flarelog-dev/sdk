@@ -4,6 +4,14 @@ Zero-config logging for [Hono](https://hono.dev) applications. Automatically
 capture request logs, errors, and traces with trace IDs — on Cloudflare
 Workers, Node.js, Bun, or Deno.
 
+## Installation
+
+```bash
+npm install @flarelog/sdk hono
+```
+
+`hono` is a peer dependency — install it if you haven't already.
+
 ## Quick Start
 
 ### Zero-config — works everywhere (recommended)
@@ -65,12 +73,6 @@ app.use("*", honoMiddleware((c) => {
   // c.env is available per-request on Workers
   return flarelog({ apiKey: c.env.TENANT_KEY, workerMode: true });
 }));
-```
-
-## Installation
-
-```bash
-npm install @flarelog/sdk hono
 ```
 
 ## What Gets Logged Automatically
