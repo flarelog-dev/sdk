@@ -218,6 +218,20 @@ export interface PriceEntry {
   reasoning?: number;
   /** USD per 1M cache-write tokens (Anthropic). */
   cacheCreationInput?: number;
+  /** Max input context window in tokens. */
+  contextWindow?: number;
+  /** Max output tokens the model can generate. */
+  maxOutput?: number;
+  /** Whether the model has a reasoning/thinking mode. */
+  hasReasoning?: boolean;
+  /** Whether the model supports tool/function calling. */
+  hasToolCall?: boolean;
+  /** Whether the model accepts attachments/images. */
+  hasAttachment?: boolean;
+  /** Supported input modalities, e.g. ["text", "image", "pdf"]. */
+  inputModalities?: string[];
+  /** Output modalities, e.g. ["text"]. */
+  outputModalities?: string[];
 }
 
 /**

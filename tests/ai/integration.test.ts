@@ -302,6 +302,6 @@ describe("flarelogAI end-to-end", () => {
     const record = aiEntries[0].metadata["flarelog.ai.record"] as Record<string, unknown>;
     expect(record.provider).toBe("openai");
     expect(record.model).toBe("meta-llama/llama-3.3-70b-instruct-turbo");
-    expect(record.costUsd).toBeCloseTo(0.0000132, 7); // (10+5)*0.88/1M
+    expect(record.costUsd).toBeCloseTo(0.0000156, 9); // (10*1.04 + 5*1.04)/1M, catalog rate for meta-llama/llama-3.3-70b-instruct-turbo
   });
 });
