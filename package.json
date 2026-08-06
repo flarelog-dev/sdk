@@ -1,7 +1,7 @@
 {
   "name": "@flarelog/sdk",
-  "version": "2.5.10",
-  "description": "Zero-dependency observability SDK. Ships logs, errors, and W3C traces from Cloudflare Workers, Vercel, Node.js, or the browser to FlareLog or any OTLP backend.",
+  "version": "2.6.0",
+  "description": "Zero-dependency observability SDK with AI inference observability. Ships logs, errors, W3C traces, and AI/LLM cost & token tracking from Cloudflare Workers, Vercel, Node.js, or the browser to FlareLog or any OTLP backend.",
   "keywords": [
     "logging",
     "cloudflare-workers",
@@ -9,7 +9,15 @@
     "serverless",
     "edge",
     "observability",
-    "logs"
+    "logs",
+    "ai",
+    "llm",
+    "openai",
+    "anthropic",
+    "token-usage",
+    "llm-observability",
+    "genai",
+    "opentelemetry"
   ],
   "author": "Chiheb Nabil",
   "license": "MIT",
@@ -107,6 +115,16 @@
       "require": {
         "types": "./dist/frameworks/vercel.d.cts",
         "default": "./dist/frameworks/vercel.cjs"
+      }
+    },
+    "./ai": {
+      "import": {
+        "types": "./dist/ai/index.d.ts",
+        "default": "./dist/ai/index.js"
+      },
+      "require": {
+        "types": "./dist/ai/index.d.cts",
+        "default": "./dist/ai/index.cjs"
       }
     },
     "./package.json": "./package.json"

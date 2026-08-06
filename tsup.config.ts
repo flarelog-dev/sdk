@@ -3,6 +3,7 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: [
     'src/index.ts',
+    'src/ai/index.ts',
     'src/frameworks/react.tsx',
     'src/frameworks/express.ts',
     'src/frameworks/hono.ts',

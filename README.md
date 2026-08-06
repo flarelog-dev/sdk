@@ -38,6 +38,26 @@ FLARELOG_API_KEY=fl_your_key
 
 ---
 
+## AI Inference Observability (new in 2.6)
+
+Zero-config instrumentation for OpenAI, Anthropic, Cloudflare Workers AI,
+Vercel AI SDK, and any OpenAI-compatible gateway. Captures tokens, latency,
+cost in USD, tool calls, and errors.
+
+```typescript
+import { flarelog } from "@flarelog/sdk";
+import { flarelogAI } from "@flarelog/sdk/ai";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+flarelogAI(logger);
+
+// Every fetch() to api.openai.com is now captured automatically.
+```
+
+See the [AI Observability guide](docs/ai-observability/README.md) for the full docs.
+
+---
+
 ## Features
 
 - **Zero dependencies** — nothing to audit, nothing to conflict
@@ -45,6 +65,7 @@ FLARELOG_API_KEY=fl_your_key
 - **W3C trace propagation** — distributed tracing across services
 - **Auto-detection** — environment, release, platform
 - **OTLP-compatible** — ships to Grafana, Honeycomb, Datadog, or any OTLP backend
+- **AI inference observability** — zero-config token, cost, and latency tracking for OpenAI, Anthropic, Workers AI, Vercel AI SDK, and any OpenAI-compatible gateway
 
 ---
 
