@@ -384,7 +384,3 @@ FlareLog-specific attributes are prefixed with `flarelog.ai.*` and are what the 
 - [ ] Custom dashboards: top-100 prompts by cost, slowest completions, retry storms
 - [ ] LangChain / LlamaIndex / Mastra instrumentation wrappers
 - [ ] Auto-generated PRs from error traces (the "AI fixes it" loop)
-
-## License
-
-MIT, same as the rest of `@flarelog/sdk`.
