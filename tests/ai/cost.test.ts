@@ -218,20 +218,20 @@ describe("PRICE_TABLE sanity checks", () => {
     expect(PRICE_TABLE["o3-mini"]).toBeDefined();
   });
 
-  it("has entries for major Anthropic models", () => {
-    expect(PRICE_TABLE["claude-opus-4"]).toBeDefined();
-    expect(PRICE_TABLE["claude-sonnet-4"]).toBeDefined();
-    expect(PRICE_TABLE["claude-3-5-sonnet"]).toBeDefined();
+it("has entries for major Anthropic models", () => {
+    expect(PRICE_TABLE["anthropic/claude-opus-4"]).toBeDefined();
+    expect(PRICE_TABLE["anthropic/claude-sonnet-4"]).toBeDefined();
+    expect(PRICE_TABLE["claude-sonnet-4-5"]).toBeDefined();
   });
 
   it("has entries for Cloudflare Workers AI", () => {
     expect(PRICE_TABLE["@cf/meta/llama-3.3-70b-instruct-fp8-fast"]).toBeDefined();
-    expect(PRICE_TABLE["@cf/meta/llama-3.1-8b-instruct"]).toBeDefined();
+    expect(PRICE_TABLE["@cf/meta/llama-3.1-8b-instruct-fp8"]).toBeDefined();
   });
 
   it("Anthropic cache rates are sensible", () => {
     // Cached read should be cheaper than fresh input.
-    const opus = PRICE_TABLE["claude-opus-4"];
+    const opus = PRICE_TABLE["anthropic/claude-opus-4"];
     expect(opus.cachedInput).toBeLessThan(opus.input);
     // Cache creation should be more expensive than fresh input.
     expect(opus.cacheCreationInput).toBeGreaterThan(opus.input);

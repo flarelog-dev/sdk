@@ -1,6 +1,6 @@
 {
   "name": "@flarelog/sdk",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "description": "Zero-dependency observability SDK with AI inference observability. Ships logs, errors, W3C traces, and AI/LLM cost & token tracking from Cloudflare Workers, Vercel, Node.js, or the browser to FlareLog or any OTLP backend.",
   "keywords": [
     "logging",
@@ -135,6 +135,7 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
+    "update-prices": "node --experimental-strip-types scripts/generate-cost-table.ts",
     "test:contract": "FLARELOG_RUN_CONTRACT_TESTS=1 vitest run tests/contract.test.ts",
     "test:smoke": "npm run build && node scripts/build-smoke.mjs",
     "lint": "eslint src/ tests/",
@@ -166,6 +167,7 @@
     "@rollup/rollup-linux-x64-gnu": "^4.62.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "@types/react": "^18.0.0",
     "esbuild": "^0.28.1",
     "react": "^18.0.0",
