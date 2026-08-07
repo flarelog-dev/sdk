@@ -38,10 +38,31 @@ import { openaiMatcher } from "./providers/openai";
 import { anthropicMatcher } from "./providers/anthropic";
 import { genericMatcher, bodyLooksLikeAI } from "./providers/generic";
 import { computeCost } from "./cost";
+import { PROVIDER_HOSTS } from "./cost-table";
 import { readSSEStream, isStreamDone } from "./sse";
 import { attachRecordToSpan, recordToLogAttributes } from "./span-attributes";
 
 const MATCHERS: ProviderMatcher[] = [openaiMatcher, anthropicMatcher, genericMatcher];
+
+/**
+ * Cache of synthetic matchers for catalog-detected providers.
+ * Each one reuses the OpenAI parser (since all catalog providers are
+ * OpenAI-compatible) but stamps the correct provider name.
+ */
+const catalogMatcherCache = new Map<string, ProviderMatcher>();
+
+function getCatalogMatcher(providerId: string): ProviderMatcher {
+  let m = catalogMatcherCache.get(providerId);
+  if (!m) {
+    m = {
+      ...openaiMatcher,
+      name: providerId,
+      match: () => false, // never claims by itself — findMatcher routes explicitly
+    };
+    catalogMatcherCache.set(providerId, m);
+  }
+  return m;
+}
 
 /**
  * The original `globalThis.fetch` reference, captured before patching.
@@ -212,6 +233,17 @@ function findMatcher(
   for (const m of MATCHERS) {
     if (m.name === "generic") continue;
     if (m.match(url, method)) return m;
+  }
+
+  // Then catalog auto-detection via PROVIDER_HOSTS hostname map.
+  try {
+    const host = new URL(url).host.toLowerCase();
+    const providerId = PROVIDER_HOSTS[host] ?? PROVIDER_HOSTS[host.split(":")[0]];
+    if (providerId) {
+      return getCatalogMatcher(providerId);
+    }
+  } catch {
+    // URL parse failed — fall through.
   }
 
   return undefined;

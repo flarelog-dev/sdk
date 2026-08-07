@@ -17,16 +17,12 @@
  * A supported AI provider. Used both for routing (which response parser to
  * use) and as a span attribute (`gen_ai.provider.name`) for grouping in the
  * dashboard.
+ *
+ * Widened to `string` so that auto-detected providers from the opencode.ai
+ * catalog (e.g. "openrouter", "groq", "deepseek") are supported without
+ * requiring type-level maintenance as the catalog grows.
  */
-export type AIProvider =
-  | "openai"
-  | "anthropic"
-  | "workers_ai"
-  | "vercel_ai_sdk"
-  | "google"
-  | "mistral"
-  | "cohere"
-  | "generic";
+export type AIProvider = string;
 
 /**
  * Token usage breakdown. All fields are optional because not every provider
