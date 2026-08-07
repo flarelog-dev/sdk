@@ -872,10 +872,25 @@ export class FlareLog {
     return enriched;
   }
 
+  /**
+   * Keys the SDK instruments itself. These are intentional metrics (token
+   * counts, latency, cost, model names) — never user credentials — so they are
+   * exempt from `scrubFields` substring redaction. Substring matching would
+   * otherwise clobber, e.g., `gen_ai.usage.input_tokens` because it contains
+   * the substring "token".
+   */
+  private static SDK_KEY_PREFIXES = ["flarelog.", "gen_ai."];
+
+  private isSdkAttributeKey(k: string): boolean {
+    return FlareLog.SDK_KEY_PREFIXES.some((p) => k.startsWith(p));
+  }
+
   private scrubAttributes(attrs: Record<string, unknown>): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(attrs)) {
-      if (this.config.scrubFields.some((f) => k.toLowerCase().includes(f.toLowerCase()))) {
+      if (this.isSdkAttributeKey(k)) {
+        out[k] = this.serializeForOtel(v);
+      } else if (this.config.scrubFields.some((f) => k.toLowerCase().includes(f.toLowerCase()))) {
         out[k] = "[REDACTED]";
       } else {
         out[k] = this.serializeForOtel(v);

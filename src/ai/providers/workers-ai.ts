@@ -31,7 +31,7 @@
 import type { FlareLog } from "../../client";
 import type { AITokenUsage, AICallRecord, AIOperation } from "../types";
 import { computeCost } from "../cost";
-import { attachRecordToSpan } from "../span-attributes";
+import { attachRecordToSpan, recordToLogAttributes } from "../span-attributes";
 
 /**
  * The Workers AI binding shape — minimal subset we depend on.
@@ -122,9 +122,10 @@ export function wrapWorkersAI(
 
             // Also emit a structured log entry — gives the dashboard a
             // searchable record with full metadata.
-            logger.info(`AI call: ${model}`, {
+logger.info(`AI call: ${model}`, {
               "flarelog.ai.record": record,
               "flarelog.kind": "ai_call",
+              ...recordToLogAttributes(record),
             });
 
             return result;
@@ -137,10 +138,11 @@ export function wrapWorkersAI(
             attachRecordToSpan(span, record);
             span.recordException(err as Error);
 
-            logger.error(`AI call failed: ${model}`, {
+logger.error(`AI call failed: ${model}`, {
               "flarelog.ai.record": record,
               "flarelog.kind": "ai_call",
               "flarelog.ai.error": true,
+              ...recordToLogAttributes(record),
             });
 
             throw err;

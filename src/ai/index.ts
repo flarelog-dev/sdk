@@ -43,7 +43,7 @@
 import type { FlareLog } from "../client";
 import { instrumentFetch, uninstrumentFetch } from "./fetch-interceptor";
 import type { AIInstrumentationConfig, AICallRecord } from "./types";
-import { attachRecordToSpan } from "./span-attributes";
+import { attachRecordToSpan, recordToLogAttributes } from "./span-attributes";
 import { computeCost } from "./cost";
 export type { WrappedWorkersAI, WorkersAIBinding } from "./providers/workers-ai";
 
@@ -165,9 +165,10 @@ export async function wrap<T>(
 
         attachRecordToSpan(span, record);
 
-        logger.info(`AI call: ${model}`, {
+logger.info(`AI call: ${model}`, {
           "flarelog.ai.record": record,
           "flarelog.kind": "ai_call",
+          ...recordToLogAttributes(record),
         });
 
         return result;
@@ -182,6 +183,7 @@ export async function wrap<T>(
           "flarelog.ai.record": record,
           "flarelog.kind": "ai_call",
           "flarelog.ai.error": true,
+          ...recordToLogAttributes(record),
         });
 
         throw err;

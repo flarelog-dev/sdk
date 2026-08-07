@@ -206,7 +206,7 @@ Callback to modify or drop logs before sending. Return false to drop.
 
 Defined in: [types.ts:120](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L120)
 
-Fields to scrub from metadata (PII redaction). Defaults to common sensitive fields.
+Fields to scrub from metadata (PII redaction). Defaults to common sensitive fields. Keys are matched by substring. SDK-instrumented attributes under the `gen_ai.*` and `flarelog.*` namespaces are exempt (token counts, latency, cost), so AI telemetry is never redacted.
 
 ***
 
@@ -333,7 +333,7 @@ Matching happens against `new URL(request.url).pathname` only — query string a
 
 Defined in: [types.ts:140](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L140)
 
-Fields to scrub from metadata (PII redaction). When a key in `metadata` matches any entry in this array, its value is replaced with `"[REDACTED]"` before the log is exported.
+Fields to scrub from metadata (PII redaction). When a key in `metadata` matches any entry in this array (substring match), its value is replaced with `"[REDACTED]"` before the log is exported. SDK-instrumented attributes under the `gen_ai.*` and `flarelog.*` namespaces are exempt so AI token/latency/cost telemetry is preserved.
 
 Defaults to common sensitive fields (e.g. `password`, `secret`, `token`, `authorization`).
 
