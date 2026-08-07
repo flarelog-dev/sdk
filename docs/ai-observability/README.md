@@ -69,6 +69,24 @@ Each call now produces:
 - An OTel span named `chat <model>` with `gen_ai.*` semantic attributes
 - A structured log entry with `flarelog.kind: "ai_call"` containing the full `AICallRecord`
 
+## How fetch interception works
+
+FlareLog uses an **inert pre-wrapper** pattern to ensure interception works even when AI SDK clients (OpenAI, Anthropic) are constructed before `flarelogAI()` is called.
+
+**The problem:** The OpenAI SDK (`openai` v4+) and Anthropic SDK (`@anthropic-ai/sdk`) both capture `globalThis.fetch` at construction time (`this.fetch = options.fetch ?? getDefaultFetch()`) and cache it for the client's lifetime. A naive patch to `globalThis.fetch` after construction is invisible to these clients.
+
+**The solution:** When `@flarelog/sdk/ai` is imported, it immediately installs a lightweight pass-through wrapper on `globalThis.fetch`. This wrapper is **inert** — it adds near-zero overhead (~2-5ns/call) and simply delegates to the real fetch. When `flarelogAI()` is called later, the wrapper "activates" and begins intercepting AI calls.
+
+```
+import "@flarelog/sdk/ai"  →  globalThis.fetch = inertWrapper (pass-through)
+new OpenAI()               →  this.fetch = inertWrapper (SDK captures our wrapper)
+flarelogAI(logger)          →  inertWrapper activates → interception begins
+```
+
+This means the **vast majority of users** don't need to think about ordering — `flarelogAI()` works regardless of when the SDK client was constructed.
+
+**Edge case:** If the AI SDK client is constructed in a separate file that's imported *before* `@flarelog/sdk/ai` (e.g. a `lib/openai.ts` module imported at the top of the entry point), the client captures the raw native fetch. In that case, use [`wrapClient()`](#wrapclient-client) after `flarelogAI()`.
+
 ### 4. (Optional) Instrument Workers AI
 
 Workers AI uses a binding, not fetch, so it needs a separate wrapper:
@@ -179,6 +197,27 @@ const ai = flarelogAI(logger);
 // ... later, if you need to remove instrumentation:
 ai.dispose();
 ```
+
+### `wrapClient(client)`
+
+Re-route an AI SDK client's internal `fetch` through `globalThis.fetch`. Use when the client was constructed before `@flarelog/sdk/ai` was imported (e.g. a `lib/openai.ts` module imported at entry-point top).
+
+Works with the **OpenAI SDK** (`openai`), **Anthropic SDK** (`@anthropic-ai/sdk`), and any client that stores `fetch` as a public property.
+
+```ts
+import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import { flarelogAI, wrapClient } from "@flarelog/sdk/ai";
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+flarelogAI(logger);
+wrapClient(openai);
+wrapClient(anthropic);
+```
+
+**Not needed** if the client is constructed after `import "@flarelog/sdk/ai"`.
 
 ### `wrap(fn, opts)`
 
@@ -359,6 +398,8 @@ The fetch interceptor adds <1ms overhead per AI call (measured on a 100-call ben
 6. Log emission — ~0.05ms
 
 For streaming responses, the body is `tee()`'d once (zero-copy), and SSE parsing happens in a background promise that doesn't block the consumer.
+
+**When inactive** (before `flarelogAI()` or never called), the inert pre-wrapper adds ~2-5ns per fetch call — a single null check on a closure variable. The wrapper is non-async to avoid Promise allocation overhead.
 
 ## OTel semantic conventions
 

@@ -2,7 +2,7 @@
  * Integration test: end-to-end fetch interception.
  *
  * Verifies the full pipeline:
- *   1. flarelogAI() patches global fetch
+ *   1. flarelogAI() activates the inert pre-wrapper
  *   2. A POST to api.openai.com/v1/chat/completions gets intercepted
  *   3. The mock response's usage is parsed
  *   4. Cost is computed
@@ -11,20 +11,18 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { flarelog } from "../../src/factory";
-import { flarelogAI, uninstrumentFetch } from "../../src/ai";
+import { flarelogAI, uninstrumentFetch, __setPassthroughFetch, __resetInterceptorState } from "../../src/ai";
 
 describe("flarelogAI end-to-end", () => {
-  let originalFetch: typeof globalThis.fetch;
   let loggedEntries: Array<{ level: string; message: string; metadata: Record<string, unknown> }>;
 
   beforeEach(() => {
-    originalFetch = globalThis.fetch;
     loggedEntries = [];
   });
 
   afterEach(() => {
     uninstrumentFetch();
-    globalThis.fetch = originalFetch;
+    __resetInterceptorState();
     vi.restoreAllMocks();
   });
 
@@ -57,7 +55,7 @@ describe("flarelogAI end-to-end", () => {
         },
       }
     );
-    globalThis.fetch = vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch;
+    __setPassthroughFetch(vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch);
 
     // Set up FlareLog + AI instrumentation.
     // Use warnOnConsoleFallback: false to suppress the noisy "no backend" warning.
@@ -111,7 +109,7 @@ describe("flarelogAI end-to-end", () => {
   it("does not intercept non-AI fetches", async () => {
     const mockResponse = new Response("OK", { status: 200 });
     const fetchSpy = vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch;
-    globalThis.fetch = fetchSpy;
+    __setPassthroughFetch(fetchSpy);
 
     const logger = flarelog({ warnOnConsoleFallback: false });
     logger.info = () => {}; // suppress all logging
@@ -146,7 +144,7 @@ describe("flarelogAI end-to-end", () => {
         "x-request-id": "req_stream_456",
       },
     });
-    globalThis.fetch = vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch;
+    __setPassthroughFetch(vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch);
 
     const logger = flarelog({ warnOnConsoleFallback: false });
     logger.info = (message: string, metadata?: Record<string, unknown>) => {
@@ -200,7 +198,7 @@ describe("flarelogAI end-to-end", () => {
         headers: { "content-type": "application/json" },
       }
     );
-    globalThis.fetch = vi.fn().mockResolvedValue(errorResponse) as unknown as typeof fetch;
+    __setPassthroughFetch(vi.fn().mockResolvedValue(errorResponse) as unknown as typeof fetch);
 
     const logger = flarelog({ warnOnConsoleFallback: false });
     logger.error = (message: string, metadata?: Record<string, unknown>) => {
@@ -240,7 +238,7 @@ describe("flarelogAI end-to-end", () => {
       { status: 200, headers: { "content-type": "application/json" } }
     );
     const fetchSpy = vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch;
-    globalThis.fetch = fetchSpy;
+    __setPassthroughFetch(fetchSpy);
 
     const logger = flarelog({ warnOnConsoleFallback: false });
     logger.info = (message: string, metadata?: Record<string, unknown>) => {
@@ -275,7 +273,7 @@ describe("flarelogAI end-to-end", () => {
       }),
       { status: 200, headers: { "content-type": "application/json" } }
     );
-    globalThis.fetch = vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch;
+    __setPassthroughFetch(vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch);
 
     const logger = flarelog({ warnOnConsoleFallback: false });
     logger.info = (message: string, metadata?: Record<string, unknown>) => {

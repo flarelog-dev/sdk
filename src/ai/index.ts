@@ -119,6 +119,47 @@ export function flarelogAI(
  * at resolution time. For streaming calls, prefer `flarelogAI()` (fetch interceptor)
  * or `withFlarelog()` (Vercel AI SDK), which handle stream consumption automatically.
  */
+
+/**
+ * Re-route an AI SDK client's internal `fetch` through `globalThis.fetch`.
+ *
+ * Both the OpenAI SDK (`openai` v4+) and the Anthropic SDK
+ * (`@anthropic-ai/sdk`) capture `globalThis.fetch` at construction time
+ * and cache it on `client.fetch` for the instance's lifetime. If the
+ * client was constructed before `@flarelog/sdk/ai` was imported, it holds
+ * a reference to the raw native fetch and bypasses all instrumentation.
+ *
+ * This function patches `client.fetch` to delegate to `globalThis.fetch`
+ * (which is flarelog's inert wrapper). Call it after `flarelogAI()`:
+ *
+ * @example
+ * ```ts
+ * import OpenAI from "openai";
+ * import Anthropic from "@anthropic-ai/sdk";
+ * import { flarelogAI, wrapClient } from "@flarelog/sdk/ai";
+ *
+ * // Clients constructed early (e.g. at module scope in lib/ai.ts):
+ * const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+ * const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+ *
+ * // Activate instrumentation:
+ * flarelogAI(logger);
+ * wrapClient(openai);      // re-routes client.fetch → globalThis.fetch
+ * wrapClient(anthropic);   // same — works for any client with .fetch
+ * ```
+ *
+ * **Not needed** if the client is constructed after `import "@flarelog/sdk/ai"`.
+ */
+export function wrapClient<T extends { fetch?: (...args: unknown[]) => unknown }>(client: T): T {
+  const originalFetchRef = client.fetch;
+  if (!originalFetchRef) return client;
+
+  (client as Record<string, unknown>).fetch = function (this: unknown, ...args: unknown[]) {
+    return (globalThis.fetch as (...a: unknown[]) => unknown).apply(undefined, args);
+  };
+
+  return client;
+}
 export async function wrap<T>(
   fn: () => Promise<T>,
   opts: {
@@ -210,7 +251,7 @@ function extractUsageFromResult(result: unknown, record: AICallRecord): void {
 }
 
 // Re-export everything that's part of the public API.
-export { instrumentFetch, uninstrumentFetch } from "./fetch-interceptor";
+export { instrumentFetch, uninstrumentFetch, __setPassthroughFetch, __resetInterceptorState } from "./fetch-interceptor";
 export { wrapWorkersAI } from "./providers/workers-ai";
 export { openaiMatcher } from "./providers/openai";
 export { anthropicMatcher } from "./providers/anthropic";

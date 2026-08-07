@@ -1,10 +1,21 @@
 /**
  * Global fetch() interceptor for AI inference observability.
  *
- * When `flarelogAI()` is called (or `instrumentFetch(logger, config)` is
- * invoked directly), this module replaces `globalThis.fetch` with a wrapper
- * that:
+ * Uses an **inert pre-wrapper** installed at module import time. This
+ * ensures that any client SDK (e.g. `openai`) which captures
+ * `globalThis.fetch` at construction time will capture our wrapper —
+ * not the raw undici/native fetch. When `flarelogAI()` is later called,
+ * the wrapper "activates" and begins intercepting AI calls.
  *
+ * The wrapper itself is a plain (non-async) function that checks a
+ * closure variable — near-zero overhead when inactive (~2-5ns/call).
+ *
+ * Activation flow:
+ * 1. Module import → installs inert wrapper on `globalThis.fetch`
+ * 2. `new OpenAI()` → SDK captures our wrapper as `this.fetch`
+ * 3. `flarelogAI(logger)` → sets `activeInterceptor`, wrapper starts routing
+ *
+ * When active, the wrapper:
  * 1. Decides whether the outgoing request is an AI call (matches against
  *    OpenAI/Anthropic hostnames, plus user-configured extras).
  * 2. If yes: clones the request, extracts the body (to read the model name),
@@ -19,10 +30,9 @@
  *   parse the other.
  * - Trace propagation: by default injects the W3C traceparent header so
  *   the AI call's span is a child of the active request span.
- * - Idempotent: calling `instrumentFetch()` twice restores the original
- *   fetch (the second call unwraps).
+ * - Idempotent: calling `instrumentFetch()` twice is a no-op.
  * - Safe: any thrown error inside the wrapper is swallowed and the
- *   original fetch is called — we never break the user's app because of
+ *   passthrough fetch is called — we never break the user's app because of
  *   an instrumentation bug.
  */
 
@@ -65,34 +75,74 @@ function getCatalogMatcher(providerId: string): ProviderMatcher {
 }
 
 /**
- * The original `globalThis.fetch` reference, captured before patching.
  * Typed loosely to avoid coupling to a specific DOM lib version.
  */
 type FetchLike = typeof fetch;
 
-let originalFetch: FetchLike | null = null;
-let isInstalled = false;
+const FLARELOG_WRAPPED = Symbol.for("flarelog.fetchWrapped");
 
 /**
- * Patch `globalThis.fetch` to intercept AI calls.
+ * The "real" fetch that passthrough calls are routed to.
+ * Captured at module load — before any user code can patch it.
+ * Tests override this via `__setPassthroughFetch`.
+ */
+let passthroughFetch: FetchLike = globalThis.fetch as FetchLike;
+
+/**
+ * The active interceptor. When null, the inert wrapper passes through.
+ * When set (by `instrumentFetch`), all calls route through it.
+ */
+let activeInterceptor: FetchLike | null = null;
+
+/**
+ * The inert wrapper installed at module import time.
  *
- * Idempotent: calling twice is a no-op (does NOT stack-wrap). To remove
- * the instrumentation, call `uninstrumentFetch()`.
+ * Non-async on purpose: returning the inner Promise directly avoids
+ * allocating an extra microtask. V8 inlines this after warmup because
+ * it's monomorphic (always calls the same target).
  *
- * @returns a cleanup function that restores the original fetch.
+ * The `FLARELOG_WRAPPED` symbol prevents double-wrapping if this module
+ * is imported multiple times (e.g. via different module resolution paths).
+ */
+const inertWrapper: FetchLike = function (input, init) {
+  const impl = activeInterceptor ?? passthroughFetch;
+  return impl.call(undefined, input, init);
+} as FetchLike;
+
+Object.defineProperty(inertWrapper, FLARELOG_WRAPPED, { value: true });
+
+/**
+ * Install the inert wrapper on `globalThis.fetch` at module import time.
+ * Idempotent — won't double-wrap if already wrapped.
+ */
+if (
+  typeof globalThis.fetch === "function" &&
+  !((globalThis.fetch as unknown as Record<symbol, unknown>)[FLARELOG_WRAPPED])
+) {
+  try {
+    Object.defineProperty(globalThis, "fetch", {
+      value: inertWrapper,
+      writable: true,
+      configurable: true,
+    });
+  } catch {
+    // Non-writable fetch — bail silently. Edge runtime, sandboxed env, etc.
+  }
+}
+
+/**
+ * Activate AI call interception.
+ *
+ * Sets `activeInterceptor` so the inert wrapper begins routing through
+ * the instrumented path. Idempotent — calling twice is a no-op.
+ *
+ * @returns a cleanup function that deactivates interception.
  */
 export function instrumentFetch(
   logger: FlareLog,
   config: AIInstrumentationConfig = {}
 ): () => void {
-  if (isInstalled) {
-    // Already installed — return a no-op cleanup.
-    return () => {};
-  }
-
-  originalFetch = globalThis.fetch as FetchLike;
-  if (!originalFetch) {
-    // No global fetch (very old Node without undici) — bail.
+  if (activeInterceptor) {
     return () => {};
   }
 
@@ -108,7 +158,6 @@ export function instrumentFetch(
   };
 
   const patchedFetch: FetchLike = async (input, init) => {
-    // Resolve URL + method for cheap rejection path.
     let urlStr: string;
     let method: string;
     try {
@@ -120,38 +169,30 @@ export function instrumentFetch(
         method = (init?.method ?? "GET") ?? "GET";
       }
     } catch {
-      // Can't even parse the input — definitely not an AI call.
-      return originalFetch!(input, init);
+      return passthroughFetch(input, init);
     }
 
-    // User-supplied filter — fastest exit path.
     if (config.shouldInstrument && !config.shouldInstrument(urlStr, method)) {
-      return originalFetch!(input, init);
+      return passthroughFetch(input, init);
     }
 
-    // Find a matching provider.
     const matcher = findMatcher(urlStr, method, config.extraProviderHosts);
 
-    // If no host-based match, check the body shape as a last resort.
     let bodyForMatching: unknown = undefined;
     if (!matcher && method.toUpperCase() === "POST") {
       try {
         bodyForMatching = await peekRequestBody(input, init);
         if (bodyLooksLikeAI(bodyForMatching)) {
-          // Use the generic matcher.
-          // (genericMatcher.match returns false; we skip past it here.)
           const generic = MATCHERS.find((m) => m.name === "generic")!;
-          // Build a "synthetic" matcher invocation.
           return instrumentedCall(logger, config, effectiveConfig, generic, urlStr, method, input, init, bodyForMatching);
         }
       } catch {
-        // Body peek failed — not an AI call we can handle.
-        return originalFetch!(input, init);
+        return passthroughFetch(input, init);
       }
     }
 
     if (!matcher) {
-      return originalFetch!(input, init);
+      return passthroughFetch(input, init);
     }
 
     return instrumentedCall(
@@ -167,39 +208,43 @@ export function instrumentFetch(
     );
   };
 
-  // Install.
-  try {
-    // Some runtimes make `globalThis.fetch` non-writable. Try/catch.
-    Object.defineProperty(globalThis, "fetch", {
-      value: patchedFetch,
-      writable: true,
-      configurable: true,
-    });
-    isInstalled = true;
-  } catch {
-    // If we can't patch, silently bail — never break the user's app.
-    return () => {};
-  }
-
+  activeInterceptor = patchedFetch;
   return () => uninstrumentFetch();
 }
 
 /**
- * Restore the original `globalThis.fetch`.
+ * Deactivate AI call interception.
+ *
+ * Sets `activeInterceptor` back to null. The inert wrapper reverts to
+ * passthrough mode. Does NOT remove the wrapper itself — clients that
+ * captured it at construction time still call through it, but with
+ * zero interception overhead.
  */
 export function uninstrumentFetch(): void {
-  if (!isInstalled || !originalFetch) return;
-  try {
-    Object.defineProperty(globalThis, "fetch", {
-      value: originalFetch,
-      writable: true,
-      configurable: true,
-    });
-  } catch {
-    // Ignore — best effort.
-  }
-  originalFetch = null;
-  isInstalled = false;
+  activeInterceptor = null;
+}
+
+/**
+ * Test helper: override the passthrough fetch for test isolation.
+ *
+ * In production, `passthroughFetch` is the native/undici fetch captured
+ * at module load. Tests need to replace it with a mock without touching
+ * `globalThis.fetch` directly (which is now our inert wrapper).
+ *
+ * @internal
+ */
+export function __setPassthroughFetch(fn: FetchLike): void {
+  passthroughFetch = fn;
+}
+
+/**
+ * Test helper: restore the original passthrough fetch.
+ *
+ * @internal
+ */
+export function __resetInterceptorState(): void {
+  activeInterceptor = null;
+  passthroughFetch = globalThis.fetch as FetchLike;
 }
 
 /**
@@ -318,7 +363,7 @@ async function instrumentedCall(
 ): Promise<Response> {
   // Sampling — independent of logger-level sampling.
   if (effectiveConfig.sampleRate < 1 && Math.random() > effectiveConfig.sampleRate) {
-    return originalFetch!(input, init);
+    return passthroughFetch(input, init);
   }
 
   // Extract model + operation early so we can name the span.
@@ -369,8 +414,8 @@ async function instrumentedCall(
       let ttfb: number;
 
       try {
-        // Fire the request through the original (un-patched) fetch.
-        response = await originalFetch!(input as RequestInfo | URL, finalInit);
+        // Fire the request through the passthrough fetch (bypasses our interceptor).
+        response = await passthroughFetch(input as RequestInfo | URL, finalInit);
         ttfb = Date.now() - startTime;
         record.latency.ttfb = ttfb;
         record.status = response.status;
