@@ -73,7 +73,7 @@ log("installing @tanstack/react-start + react + vite...");
 try {
   execSync(
     "npm install --no-audit --no-fund --legacy-peer-deps " +
-      "@tanstack/react-start@latest react@18 react-dom@18 vite@latest",
+      "@tanstack/react-start@1.168.19 react@18 react-dom@18 vite@latest",
     { cwd: TMP, stdio: "pipe" },
   );
 } catch (e) {
