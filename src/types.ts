@@ -136,7 +136,7 @@ export interface FlareLogConfig {
   /** Callback to modify or drop logs before sending. Return false to drop. */
   beforeSend?: (log: LogEntry) => LogEntry | false;
 
-  /** Fields to scrub from metadata (PII redaction). Defaults to common sensitive fields. */
+  /** Fields to scrub from metadata (PII redaction). Defaults to common sensitive fields. Keys are matched by substring. SDK-instrumented attributes under the `gen_ai.*` and `flarelog.*` namespaces are exempt. */
   scrubFields?: string[];
 
   /** Sample rate for logs (0.0 to 1.0). Defaults to 1.0 (100%) */

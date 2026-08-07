@@ -343,3 +343,56 @@ describe("FlareLog sample rate", () => {
     expect(logs).toHaveLength(0);
   });
 });
+
+describe("FlareLog PII scrubbing", () => {
+  let logger: FlareLog;
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = mockFetch();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    logger?.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it("redacts sensitive user metadata via substring match", async () => {
+    logger = createLogger();
+    logger.info("sensitive", {
+      password: "hunter2",
+      apiKey: "sk-test",
+      userSession: "abc",
+    });
+
+    const logs = await flushAndGetLogs(logger, fetchMock);
+    expect(logs[0].metadata).toMatchObject({
+      password: "[REDACTED]",
+      apiKey: "[REDACTED]",
+      userSession: "[REDACTED]",
+    });
+  });
+
+  it("does not redact SDK-instrumented gen_ai and flarelog attributes", async () => {
+    logger = createLogger();
+    logger.info("ai call", {
+      "gen_ai.provider.name": "openai",
+      "gen_ai.usage.input_tokens": 10,
+      "gen_ai.usage.output_tokens": 20,
+      "gen_ai.usage.reasoning.output_tokens": 5,
+      "flarelog.ai.tokens_per_second": 42,
+      "flarelog.ai.cost_usd": 0.001,
+    });
+
+    const logs = await flushAndGetLogs(logger, fetchMock);
+    expect(logs[0].metadata).toMatchObject({
+      "gen_ai.provider.name": "openai",
+      "gen_ai.usage.input_tokens": 10,
+      "gen_ai.usage.output_tokens": 20,
+      "gen_ai.usage.reasoning.output_tokens": 5,
+      "flarelog.ai.tokens_per_second": 42,
+      "flarelog.ai.cost_usd": 0.001,
+    });
+  });
+});

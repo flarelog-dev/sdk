@@ -93,10 +93,83 @@ export function attachRecordToSpan(span: AttributeSpan, record: AICallRecord): v
     );
   }
 
-  // --- User-provided tags ---
+// --- User-provided tags ---
   if (record.tags) {
     for (const [k, v] of Object.entries(record.tags)) {
       span.setAttribute(`flarelog.ai.tag.${k}`, v);
     }
   }
+}
+
+/**
+ * Return the AICallRecord's fields as a flat attribute object using the same
+ * OTel GenAI + `flarelog.ai.*` keys that the dashboard aggregates read.
+ *
+ * The structured AI log entries ship the full record nested under
+ * `flarelog.ai.record`; these flattened siblings let downstream backends
+ * (Axiom, etc.) extract cost / tokens / latency without parsing the JSON.
+ */
+export function recordToLogAttributes(record: AICallRecord): Record<string, unknown> {
+  const attrs: Record<string, unknown> = {
+    "gen_ai.provider.name": record.provider,
+    "gen_ai.response.model": record.model,
+    "gen_ai.operation.name": record.operation,
+  };
+
+  if (record.tokens.input !== undefined) {
+    attrs["gen_ai.usage.input_tokens"] = record.tokens.input;
+  }
+  if (record.tokens.output !== undefined) {
+    attrs["gen_ai.usage.output_tokens"] = record.tokens.output;
+  }
+  if (record.tokens.cachedInput !== undefined) {
+    attrs["gen_ai.usage.cache_read.input_tokens"] = record.tokens.cachedInput;
+  }
+  if (record.tokens.reasoning !== undefined) {
+    attrs["gen_ai.usage.reasoning.output_tokens"] = record.tokens.reasoning;
+  }
+  if (record.tokens.cacheCreationInput !== undefined) {
+    attrs["gen_ai.usage.cache_creation.input_tokens"] = record.tokens.cacheCreationInput;
+  }
+  if (record.latency.ttfb !== undefined) {
+    attrs["flarelog.ai.ttfb_ms"] = record.latency.ttfb;
+  }
+  if (record.latency.total !== undefined) {
+    attrs["flarelog.ai.total_ms"] = record.latency.total;
+  }
+  if (record.latency.streamChunks !== undefined) {
+    attrs["flarelog.ai.stream_chunks"] = record.latency.streamChunks;
+  }
+  if (record.latency.tokensPerSecond !== undefined) {
+    attrs["flarelog.ai.tokens_per_second"] = record.latency.tokensPerSecond;
+  }
+  if (record.costUsd !== undefined) {
+    attrs["flarelog.ai.cost_usd"] = record.costUsd;
+  }
+  if (record.status !== undefined) {
+    attrs["flarelog.ai.status_code"] = record.status;
+  }
+  if (record.requestId) {
+    attrs["flarelog.ai.request_id"] = record.requestId;
+  }
+  if (record.errorType) {
+    attrs["flarelog.ai.error_type"] = record.errorType;
+  }
+  if (record.streamed) {
+    attrs["flarelog.ai.streamed"] = true;
+  }
+  if (record.retries !== undefined && record.retries > 0) {
+    attrs["flarelog.ai.retries"] = record.retries;
+  }
+  if (record.toolCalls && record.toolCalls.length > 0) {
+    attrs["flarelog.ai.tool_call_count"] = record.toolCalls.length;
+    attrs["flarelog.ai.tool_call_names"] = record.toolCalls.map((t) => t.name);
+  }
+  if (record.tags) {
+    for (const [k, v] of Object.entries(record.tags)) {
+      attrs[`flarelog.ai.tag.${k}`] = v;
+    }
+  }
+
+  return attrs;
 }

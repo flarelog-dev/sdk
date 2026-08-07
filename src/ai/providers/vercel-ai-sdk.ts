@@ -38,7 +38,7 @@
 
 import type { FlareLog } from "../../client";
 import type { AICallRecord, AIProvider } from "../types";
-import { attachRecordToSpan } from "../span-attributes";
+import { attachRecordToSpan, recordToLogAttributes } from "../span-attributes";
 import { computeCost } from "../cost";
 
 /**
@@ -104,10 +104,11 @@ export async function withFlarelog<T extends AISDKResult>(
 
         attachRecordToSpan(span, record);
 
-        logger.info(`AI call: ${modelId}`, {
+logger.info(`AI call: ${modelId}`, {
           "flarelog.ai.record": record,
           "flarelog.kind": "ai_call",
           "flarelog.ai.wrapper": "vercel_sdk",
+          ...recordToLogAttributes(record),
         });
 
         return result;
@@ -125,11 +126,12 @@ export async function withFlarelog<T extends AISDKResult>(
         attachRecordToSpan(span, record);
         span.recordException(err as Error);
 
-        logger.error(`AI call failed: vercel_sdk`, {
+logger.error(`AI call failed: vercel_sdk`, {
           "flarelog.ai.record": record,
           "flarelog.kind": "ai_call",
           "flarelog.ai.wrapper": "vercel_sdk",
           "flarelog.ai.error": true,
+          ...recordToLogAttributes(record),
         });
 
         throw err;

@@ -39,7 +39,7 @@ import { anthropicMatcher } from "./providers/anthropic";
 import { genericMatcher, bodyLooksLikeAI } from "./providers/generic";
 import { computeCost } from "./cost";
 import { readSSEStream, isStreamDone } from "./sse";
-import { attachRecordToSpan } from "./span-attributes";
+import { attachRecordToSpan, recordToLogAttributes } from "./span-attributes";
 
 const MATCHERS: ProviderMatcher[] = [openaiMatcher, anthropicMatcher, genericMatcher];
 
@@ -419,9 +419,10 @@ async function instrumentedCall(
         attachRecordToSpan(span, record);
 
         // Structured log entry — gives the dashboard full-text search.
-        logger.info(`AI call: ${model}`, {
+logger.info(`AI call: ${model}`, {
           "flarelog.ai.record": record,
           "flarelog.kind": "ai_call",
+          ...recordToLogAttributes(record),
         });
 
         return response;
@@ -433,10 +434,11 @@ async function instrumentedCall(
         attachRecordToSpan(span, record);
         span.recordException(err as Error);
 
-        logger.error(`AI call exception: ${model}`, {
+logger.error(`AI call exception: ${model}`, {
           "flarelog.ai.record": record,
           "flarelog.kind": "ai_call",
           "flarelog.ai.error": true,
+          ...recordToLogAttributes(record),
         });
 
         throw err;
