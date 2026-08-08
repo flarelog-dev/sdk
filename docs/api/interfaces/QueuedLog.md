@@ -6,7 +6,7 @@
 
 # Interface: QueuedLog
 
-Defined in: [types.ts:299](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L299)
+Defined in: [types.ts:418](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L418)
 
 Internal queued log with resolved timestamp (kept for backwards compat).
 
@@ -20,7 +20,7 @@ Internal queued log with resolved timestamp (kept for backwards compat).
 
 > **level**: [`LogLevel`](../type-aliases/LogLevel.md)
 
-Defined in: [types.ts:20](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L20)
+Defined in: [types.ts:22](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L22)
 
 Log severity level
 
@@ -34,7 +34,7 @@ Log severity level
 
 > **message**: `string`
 
-Defined in: [types.ts:22](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L22)
+Defined in: [types.ts:24](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L24)
 
 Log message body
 
@@ -48,7 +48,7 @@ Log message body
 
 > `optional` **source?**: `string`
 
-Defined in: [types.ts:24](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L24)
+Defined in: [types.ts:26](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L26)
 
 Source identifier (e.g., function name, route)
 
@@ -62,7 +62,7 @@ Source identifier (e.g., function name, route)
 
 > `optional` **metadata?**: `Record`\<`string`, `unknown`\>
 
-Defined in: [types.ts:26](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L26)
+Defined in: [types.ts:28](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L28)
 
 Arbitrary structured metadata
 
@@ -76,7 +76,7 @@ Arbitrary structured metadata
 
 > `optional` **traceId?**: `string`
 
-Defined in: [types.ts:28](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L28)
+Defined in: [types.ts:30](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L30)
 
 Trace ID for distributed tracing (W3C, 32 hex chars)
 
@@ -90,7 +90,7 @@ Trace ID for distributed tracing (W3C, 32 hex chars)
 
 > `optional` **spanId?**: `string`
 
-Defined in: [types.ts:30](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L30)
+Defined in: [types.ts:32](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L32)
 
 Span ID for distributed tracing (W3C, 16 hex chars)
 
@@ -104,7 +104,7 @@ Span ID for distributed tracing (W3C, 16 hex chars)
 
 > **timestamp**: `string`
 
-Defined in: [types.ts:300](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L300)
+Defined in: [types.ts:419](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L419)
 
 ISO 8601 timestamp. Defaults to current time if not provided.
 

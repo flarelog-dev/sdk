@@ -8,7 +8,4 @@
 
 > **LogLevel** = `"TRACE"` \| `"DEBUG"` \| `"INFO"` \| `"WARN"` \| `"ERROR"` \| `"FATAL"`
 
-Defined in: [types.ts:5](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L5)
-
-Log severity levels following OpenTelemetry conventions.
-Numeric severity values: TRACE=1, DEBUG=5, INFO=9, WARN=13, ERROR=17, FATAL=21.
+Defined in: [types.ts:7](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L7)

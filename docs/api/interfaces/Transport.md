@@ -6,7 +6,7 @@
 
 # Interface: Transport
 
-Defined in: [otel/transport.ts:15](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/transport.ts#L15)
+Defined in: [otel/transport.ts:15](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/transport.ts#L15)
 
 A Transport is responsible for delivering telemetry to a backend.
 
@@ -24,7 +24,7 @@ Implementations:
 
 > `readonly` **name**: `string`
 
-Defined in: [otel/transport.ts:17](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/transport.ts#L17)
+Defined in: [otel/transport.ts:17](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/transport.ts#L17)
 
 Human-readable name for debug logging.
 
@@ -34,7 +34,7 @@ Human-readable name for debug logging.
 
 > **exportLogs**(`logs`): `Promise`\<`void`\>
 
-Defined in: [otel/transport.ts:20](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/transport.ts#L20)
+Defined in: [otel/transport.ts:20](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/transport.ts#L20)
 
 Called by the LogRecordProcessor when a log record is emitted.
 
@@ -54,7 +54,7 @@ Called by the LogRecordProcessor when a log record is emitted.
 
 > **exportSpans**(`spans`): `Promise`\<`void`\>
 
-Defined in: [otel/transport.ts:23](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/transport.ts#L23)
+Defined in: [otel/transport.ts:23](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/transport.ts#L23)
 
 Called by the SpanProcessor when a span ends.
 
@@ -74,7 +74,7 @@ Called by the SpanProcessor when a span ends.
 
 > **flush**(): `Promise`\<`void`\>
 
-Defined in: [otel/transport.ts:26](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/transport.ts#L26)
+Defined in: [otel/transport.ts:26](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/transport.ts#L26)
 
 Force-flush any in-flight batches. Called on ctx.waitUntil().
 
@@ -88,7 +88,7 @@ Force-flush any in-flight batches. Called on ctx.waitUntil().
 
 > **shutdown**(): `Promise`\<`void`\>
 
-Defined in: [otel/transport.ts:29](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/transport.ts#L29)
+Defined in: [otel/transport.ts:29](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/transport.ts#L29)
 
 Release resources (timers, connections).
 

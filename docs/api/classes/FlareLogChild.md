@@ -6,7 +6,7 @@
 
 # Class: FlareLogChild
 
-Defined in: [client.ts:772](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L772)
+Defined in: [client.ts:953](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L953)
 
 FlareLogChild — a child logger that carries default metadata.
 Logs via the parent's OTel Logger.
@@ -21,7 +21,7 @@ Logs via the parent's OTel Logger.
 
 > **new FlareLogChild**(`parent`, `defaults`): `FlareLogChild`
 
-Defined in: [client.ts:776](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L776)
+Defined in: [client.ts:957](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L957)
 
 #### Parameters
 
@@ -43,7 +43,7 @@ Defined in: [client.ts:776](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **trace**(`message`, `metadata?`): `void`
 
-Defined in: [client.ts:784](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L784)
+Defined in: [client.ts:965](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L965)
 
 #### Parameters
 
@@ -69,7 +69,7 @@ Defined in: [client.ts:784](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **debug**(`message`, `metadata?`): `void`
 
-Defined in: [client.ts:785](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L785)
+Defined in: [client.ts:966](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L966)
 
 #### Parameters
 
@@ -95,7 +95,7 @@ Defined in: [client.ts:785](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **info**(`message`, `metadata?`): `void`
 
-Defined in: [client.ts:786](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L786)
+Defined in: [client.ts:967](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L967)
 
 #### Parameters
 
@@ -121,7 +121,7 @@ Defined in: [client.ts:786](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **warn**(`message`, `metadata?`): `void`
 
-Defined in: [client.ts:787](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L787)
+Defined in: [client.ts:968](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L968)
 
 #### Parameters
 
@@ -147,7 +147,7 @@ Defined in: [client.ts:787](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **error**(`message`, `metadata?`): `void`
 
-Defined in: [client.ts:788](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L788)
+Defined in: [client.ts:969](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L969)
 
 #### Parameters
 
@@ -173,7 +173,7 @@ Defined in: [client.ts:788](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **fatal**(`message`, `metadata?`): `void`
 
-Defined in: [client.ts:789](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L789)
+Defined in: [client.ts:970](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L970)
 
 #### Parameters
 
@@ -199,7 +199,7 @@ Defined in: [client.ts:789](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **log**(`level`, `message`, `metadata?`, `opts?`): `void`
 
-Defined in: [client.ts:791](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L791)
+Defined in: [client.ts:972](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L972)
 
 #### Parameters
 
@@ -243,7 +243,7 @@ Defined in: [client.ts:791](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **logError**(`err`, `opts?`): `void`
 
-Defined in: [client.ts:795](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L795)
+Defined in: [client.ts:976](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L976)
 
 #### Parameters
 
@@ -287,7 +287,7 @@ Defined in: [client.ts:795](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **addBreadcrumb**(`breadcrumb`): `void`
 
-Defined in: [client.ts:799](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L799)
+Defined in: [client.ts:980](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L980)
 
 #### Parameters
 
@@ -309,7 +309,7 @@ Defined in: [client.ts:799](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **setUser**(`user`): `void`
 
-Defined in: [client.ts:800](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L800)
+Defined in: [client.ts:981](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L981)
 
 #### Parameters
 
@@ -331,7 +331,7 @@ Defined in: [client.ts:800](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **setTag**(`key`, `value`): `void`
 
-Defined in: [client.ts:801](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L801)
+Defined in: [client.ts:982](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L982)
 
 #### Parameters
 
@@ -357,7 +357,7 @@ Defined in: [client.ts:801](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **flush**(): `Promise`\<`void`\>
 
-Defined in: [client.ts:802](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L802)
+Defined in: [client.ts:983](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L983)
 
 #### Returns
 
@@ -373,7 +373,7 @@ Defined in: [client.ts:802](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94
 
 > **child**(`defaults`): `FlareLogChild`
 
-Defined in: [client.ts:803](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/client.ts#L803)
+Defined in: [client.ts:984](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/client.ts#L984)
 
 #### Parameters
 

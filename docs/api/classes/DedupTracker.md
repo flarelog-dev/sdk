@@ -6,7 +6,7 @@
 
 # Class: DedupTracker
 
-Defined in: [dedup.ts:6](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/dedup.ts#L6)
+Defined in: [dedup.ts:6](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/dedup.ts#L6)
 
 ## Constructors
 
@@ -14,7 +14,7 @@ Defined in: [dedup.ts:6](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe2
 
 > **new DedupTracker**(`opts`): `DedupTracker`
 
-Defined in: [dedup.ts:11](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/dedup.ts#L11)
+Defined in: [dedup.ts:11](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/dedup.ts#L11)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [dedup.ts:11](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe
 
 > **isDuplicate**(`key`): `boolean`
 
-Defined in: [dedup.ts:16](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/dedup.ts#L16)
+Defined in: [dedup.ts:16](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/dedup.ts#L16)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [dedup.ts:16](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe
 
 > **clear**(): `void`
 
-Defined in: [dedup.ts:45](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/dedup.ts#L45)
+Defined in: [dedup.ts:45](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/dedup.ts#L45)
 
 #### Returns
 

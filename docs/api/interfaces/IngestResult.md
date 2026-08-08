@@ -6,7 +6,7 @@
 
 # Interface: IngestResult
 
-Defined in: [types.ts:211](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L211)
+Defined in: [types.ts:296](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L296)
 
 Result of a log ingestion operation
 
@@ -16,7 +16,7 @@ Result of a log ingestion operation
 
 > **success**: `boolean`
 
-Defined in: [types.ts:212](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L212)
+Defined in: [types.ts:297](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L297)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [types.ts:212](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94f
 
 > **ingested**: `number`
 
-Defined in: [types.ts:213](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L213)
+Defined in: [types.ts:298](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L298)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [types.ts:213](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94f
 
 > `optional` **error?**: `string`
 
-Defined in: [types.ts:214](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L214)
+Defined in: [types.ts:299](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L299)

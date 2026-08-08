@@ -6,7 +6,7 @@
 
 # Interface: ConsoleCaptureOptions
 
-Defined in: [types.ts:199](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L199)
+Defined in: [types.ts:284](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L284)
 
 Options for console hook capture
 
@@ -16,7 +16,7 @@ Options for console hook capture
 
 > `optional` **levels?**: [`ConsoleLevel`](../type-aliases/ConsoleLevel.md)[]
 
-Defined in: [types.ts:201](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L201)
+Defined in: [types.ts:286](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L286)
 
 Console methods to intercept. Defaults to ["error", "warn"]
 
@@ -26,7 +26,7 @@ Console methods to intercept. Defaults to ["error", "warn"]
 
 > `optional` **source?**: `string`
 
-Defined in: [types.ts:203](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L203)
+Defined in: [types.ts:288](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L288)
 
 Source tag for captured console logs. Defaults to "console"
 
@@ -36,6 +36,6 @@ Source tag for captured console logs. Defaults to "console"
 
 > `optional` **includeArgs?**: `boolean`
 
-Defined in: [types.ts:205](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L205)
+Defined in: [types.ts:290](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L290)
 
 Include original console arguments in metadata. Defaults to true

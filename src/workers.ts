@@ -1,7 +1,5 @@
 import type { FlareLogLike, WorkerFetchHandler, ExecutionContextLike } from "./types";
-import { extractContext, injectContext, ensurePropagatorInstalled } from "./otel/propagation";
-
-ensurePropagatorInstalled();
+import { extractContext, injectContext } from "./otel/propagation";
 
 /**
  * Wrap a Cloudflare Worker fetch handler with automatic OTel instrumentation.

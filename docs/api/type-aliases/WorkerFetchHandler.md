@@ -8,7 +8,7 @@
 
 > **WorkerFetchHandler**\<`T`\> = (`request`, `env`, `ctx`) => `Promise`\<`T`\>
 
-Defined in: [types.ts:278](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L278)
+Defined in: [types.ts:390](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L390)
 
 Cloudflare Worker fetch handler signature
 

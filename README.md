@@ -47,12 +47,33 @@ cost in USD, tool calls, and errors — viewable in the
 
 ```typescript
 import { flarelog } from "@flarelog/sdk";
-import { flarelogAI } from "@flarelog/sdk/ai";
+
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY,
+  ai: true, // one flag — every fetch() to OpenAI/Anthropic/etc. is captured
+});
+```
+
+Need fine-grained control? Pass a config object instead:
+
+```typescript
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY,
+  ai: {
+    captureSamples: true,
+    priceOverrides: { "gpt-4o": { input: 2.5, output: 10 } },
+  },
+});
+```
+
+You can also use `flarelogAI` directly (re-exported from the main package):
+
+```typescript
+import { flarelog, flarelogAI } from "@flarelog/sdk";
 
 const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
-flarelogAI(logger);
-
-// Every fetch() to api.openai.com is now captured automatically.
+const handle = flarelogAI(logger);
+// handle.dispose() to remove instrumentation later
 ```
 
 Streaming OpenAI calls capture tokens when you enable usage reporting (Anthropic

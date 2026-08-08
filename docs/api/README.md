@@ -15,6 +15,8 @@
 
 ## Interfaces
 
+- [AIInstrumentationHandle](interfaces/AIInstrumentationHandle.md)
+- [AIInstrumentationConfig](interfaces/AIInstrumentationConfig.md)
 - [Transport](interfaces/Transport.md)
 - [TransportCapabilities](interfaces/TransportCapabilities.md)
 - [LogEntry](interfaces/LogEntry.md)
@@ -27,6 +29,7 @@
 - [CaptureOptions](interfaces/CaptureOptions.md)
 - [FlareLogLike](interfaces/FlareLogLike.md)
 - [ExecutionContextLike](interfaces/ExecutionContextLike.md)
+- [PagesFunctionContext](interfaces/PagesFunctionContext.md)
 - [RequestContext](interfaces/RequestContext.md)
 - [QueuedLog](interfaces/QueuedLog.md)
 
@@ -37,10 +40,14 @@
 - [LogLevel](type-aliases/LogLevel.md)
 - [ConsoleLevel](type-aliases/ConsoleLevel.md)
 - [TransportConfig](type-aliases/TransportConfig.md)
+- [PagesFunctionHandler](type-aliases/PagesFunctionHandler.md)
 - [WorkerFetchHandler](type-aliases/WorkerFetchHandler.md)
 
 ## Functions
 
+- [flarelogAI](functions/flarelogAI.md)
+- [wrapClient](functions/wrapClient.md)
+- [wrap](functions/wrap.md)
 - [runWithHookSkipped](functions/runWithHookSkipped.md)
 - [installConsoleHooks](functions/installConsoleHooks.md)
 - [serializeError](functions/serializeError.md)
@@ -52,6 +59,7 @@
 - [formatConsoleMessage](functions/formatConsoleMessage.md)
 - [flarelog](functions/flarelog.md)
 - [workerFetch](functions/workerFetch.md)
+- [pagesFunction](functions/pagesFunction.md)
 - [withVercelServerless](functions/withVercelServerless.md)
 - [withVercelEdge](functions/withVercelEdge.md)
 - [detectVercelEnv](functions/detectVercelEnv.md)

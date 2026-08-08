@@ -25,16 +25,43 @@ The AI module ships as a subpath export — no extra package needed.
 
 ### 2. Enable
 
+**Zero-config (recommended):**
+
 ```ts
 import { flarelog } from "@flarelog/sdk";
-import { flarelogAI } from "@flarelog/sdk/ai";
 
 const logger = flarelog({
   apiKey: process.env.FLARELOG_API_KEY!, // optional — works console-only without
+  ai: true, // one flag — every fetch() to OpenAI/Anthropic/etc. is captured
+});
+```
+
+Or pass full config for fine-grained control:
+
+```ts
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY!,
+  ai: {
+    captureSamples: true,
+    priceOverrides: { "gpt-4o": { input: 2.5, output: 10 } },
+  },
+});
+```
+
+Use `logger.disposeAI()` to remove instrumentation, or `logger.destroy()` to
+clean up everything at once.
+
+**Alternative — `flarelogAI()` (re-exported from the main package):**
+
+```ts
+import { flarelog, flarelogAI } from "@flarelog/sdk";
+
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY!,
 });
 
-// One call. Now every fetch() to OpenAI/Anthropic/etc. is captured.
-const ai = flarelogAI(logger);
+const handle = flarelogAI(logger);
+// handle.dispose() to remove instrumentation later
 ```
 
 ### 3. Use your AI SDK as usual
@@ -75,21 +102,21 @@ Then open the **AI observability dashboard** at [flarelog.dev/ai-observability](
 
 ## How fetch interception works
 
-FlareLog uses an **inert pre-wrapper** pattern to ensure interception works even when AI SDK clients (OpenAI, Anthropic) are constructed before `flarelogAI()` is called.
+FlareLog uses an **inert pre-wrapper** pattern to ensure interception works even when AI SDK clients (OpenAI, Anthropic) are constructed before `flarelogAI()` or `ai: true` is used.
 
 **The problem:** The OpenAI SDK (`openai` v4+) and Anthropic SDK (`@anthropic-ai/sdk`) both capture `globalThis.fetch` at construction time (`this.fetch = options.fetch ?? getDefaultFetch()`) and cache it for the client's lifetime. A naive patch to `globalThis.fetch` after construction is invisible to these clients.
 
-**The solution:** When `@flarelog/sdk/ai` is imported, it immediately installs a lightweight pass-through wrapper on `globalThis.fetch`. This wrapper is **inert** — it adds near-zero overhead (~2-5ns/call) and simply delegates to the real fetch. When `flarelogAI()` is called later, the wrapper "activates" and begins intercepting AI calls.
+**The solution:** When the SDK is imported, it installs a lightweight pass-through wrapper on `globalThis.fetch`. This wrapper is **inert** — it adds near-zero overhead (~2-5ns/call) and simply delegates to the real fetch. When `ai: true` or `flarelogAI()` is activated, the wrapper "activates" and begins intercepting AI calls.
 
 ```
-import "@flarelog/sdk/ai"  →  globalThis.fetch = inertWrapper (pass-through)
-new OpenAI()               →  this.fetch = inertWrapper (SDK captures our wrapper)
-flarelogAI(logger)          →  inertWrapper activates → interception begins
+import { flarelog }     →  globalThis.fetch = inertWrapper (pass-through)
+new OpenAI()             →  this.fetch = inertWrapper (SDK captures our wrapper)
+flarelog({ ai: true })   →  inertWrapper activates → interception begins
 ```
 
-This means the **vast majority of users** don't need to think about ordering — `flarelogAI()` works regardless of when the SDK client was constructed.
+This means the **vast majority of users** don't need to think about ordering — `ai: true` works regardless of when the SDK client was constructed.
 
-**Edge case:** If the AI SDK client is constructed in a separate file that's imported *before* `@flarelog/sdk/ai` (e.g. a `lib/openai.ts` module imported at the top of the entry point), the client captures the raw native fetch. In that case, use [`wrapClient()`](#wrapclient-client) after `flarelogAI()`.
+**Edge case:** If the AI SDK client is constructed in a separate file that's imported *before* `@flarelog/sdk` (e.g. a `lib/openai.ts` module imported at the top of the entry point), the client captures the raw native fetch. In that case, use [`wrapClient()`](#wrapclient-client) after enabling AI.
 
 ### 4. (Optional) Instrument Workers AI
 
@@ -155,6 +182,35 @@ Every AI call produces an `AICallRecord` with these fields:
 
 ## Configuration
 
+You can pass AI config in two ways:
+
+**Via the client constructor (recommended):**
+
+```ts
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY,
+  ai: {
+    autoFetch: true,
+    propagateTrace: true,
+    captureSamples: false,
+    maxPromptSampleChars: 500,
+    priceOverrides: {
+      "my-custom-model": { input: 1, output: 2 },
+    },
+    costMultiplier: 1.0,
+    sampleRate: 1.0,
+    shouldInstrument: (url, method) => !url.includes("/internal/"),
+    extraProviderHosts: [
+      { pattern: "api.together.xyz", provider: "openai" },
+      { pattern: "api.groq.com", provider: "openai" },
+      { pattern: /.*\.openrouter\.ai$/, provider: "openai" },
+    ],
+  },
+});
+```
+
+**Via `flarelogAI()`:**
+
 ```ts
 flarelogAI(logger, {
   // Auto-patch global fetch(). Default: true.
@@ -194,34 +250,39 @@ flarelogAI(logger, {
 
 ### `flarelogAI(logger, config?)`
 
-Enable AI instrumentation. Returns a handle with a `dispose()` method.
+Enable AI instrumentation. Returns a handle with a `dispose()` method. Also re-exported from `@flarelog/sdk` directly — no need for a separate import path.
 
 ```ts
+import { flarelog, flarelogAI } from "@flarelog/sdk";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
 const ai = flarelogAI(logger);
 // ... later, if you need to remove instrumentation:
 ai.dispose();
 ```
 
+> **Tip:** If you used `ai: true` in the constructor instead, call `logger.disposeAI()` to remove instrumentation.
+
 ### `wrapClient(client)`
 
-Re-route an AI SDK client's internal `fetch` through `globalThis.fetch`. Use when the client was constructed before `@flarelog/sdk/ai` was imported (e.g. a `lib/openai.ts` module imported at entry-point top).
+Re-route an AI SDK client's internal `fetch` through `globalThis.fetch`. Use when the client was constructed before `@flarelog/sdk` was imported (e.g. a `lib/openai.ts` module imported at entry-point top).
 
-Works with the **OpenAI SDK** (`openai`), **Anthropic SDK** (`@anthropic-ai/sdk`), and any client that stores `fetch` as a public property.
+Works with the **OpenAI SDK** (`openai`), **Anthropic SDK** (`@anthropic-ai/sdk`), and any client that stores `fetch` as a public property. Also re-exported from `@flarelog/sdk`.
 
 ```ts
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
-import { flarelogAI, wrapClient } from "@flarelog/sdk/ai";
+import { flarelog, flarelogAI, wrapClient } from "@flarelog/sdk";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-flarelogAI(logger);
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY, ai: true });
 wrapClient(openai);
 wrapClient(anthropic);
 ```
 
-**Not needed** if the client is constructed after `import "@flarelog/sdk/ai"`.
+**Not needed** if the client is constructed after `@flarelog/sdk` is imported.
 
 ### `wrap(fn, opts)`
 
@@ -331,8 +392,11 @@ If you're using a provider we don't support yet (e.g. a new AI gateway), you hav
 
 1. **Quick:** Add it as an OpenAI-compatible host:
    ```ts
-   flarelogAI(logger, {
-     extraProviderHosts: [{ pattern: "api.your-gateway.com", provider: "openai" }],
+   const logger = flarelog({
+     apiKey: process.env.FLARELOG_API_KEY,
+     ai: {
+       extraProviderHosts: [{ pattern: "api.your-gateway.com", provider: "openai" }],
+     },
    });
    ```
 
@@ -359,10 +423,13 @@ The bundled price table covers ~80 models across OpenAI, Anthropic, Cloudflare W
 **Prices drift.** Always override with `priceOverrides` when billing-grade accuracy matters:
 
 ```ts
-flarelogAI(logger, {
-  priceOverrides: {
-    // Your negotiated rate, or today's price after a provider update
-    "gpt-4o": { input: 2.25, output: 9, cachedInput: 1.125 },
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY,
+  ai: {
+    priceOverrides: {
+      // Your negotiated rate, or today's price after a provider update
+      "gpt-4o": { input: 2.25, output: 9, cachedInput: 1.125 },
+    },
   },
 });
 ```
@@ -370,8 +437,9 @@ flarelogAI(logger, {
 You can also apply a multiplier for internal cost allocation:
 
 ```ts
-flarelogAI(logger, {
-  costMultiplier: 1.5, // charge 150% to internal teams
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY,
+  ai: { costMultiplier: 1.5 }, // charge 150% to internal teams
 });
 ```
 
@@ -382,9 +450,12 @@ By default, the SDK captures **only metadata** — token counts, latency, cost, 
 To enable prompt/completion samples (e.g. for debugging):
 
 ```ts
-flarelogAI(logger, {
-  captureSamples: true,
-  maxPromptSampleChars: 500, // first 500 chars of first user message + first completion
+const logger = flarelog({
+  apiKey: process.env.FLARELOG_API_KEY,
+  ai: {
+    captureSamples: true,
+    maxPromptSampleChars: 500, // first 500 chars of first user message + first completion
+  },
 });
 ```
 

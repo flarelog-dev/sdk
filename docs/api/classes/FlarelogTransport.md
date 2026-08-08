@@ -6,7 +6,7 @@
 
 # Class: FlarelogTransport
 
-Defined in: [otel/flarelog-transport.ts:30](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/flarelog-transport.ts#L30)
+Defined in: [otel/flarelog-transport.ts:32](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/flarelog-transport.ts#L32)
 
 FlarelogTransport — ships telemetry to Flarelog's hosted backend.
 
@@ -28,7 +28,7 @@ The Flarelog backend accepts standard OTLP/HTTP JSON at /api/v1/logs and
 
 > **new FlarelogTransport**(`config`): `FlarelogTransport`
 
-Defined in: [otel/flarelog-transport.ts:39](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/flarelog-transport.ts#L39)
+Defined in: [otel/flarelog-transport.ts:42](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/flarelog-transport.ts#L42)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [otel/flarelog-transport.ts:39](https://github.com/flarelog-dev/sdk/
 
 > `readonly` **name**: `"flarelog"` = `"flarelog"`
 
-Defined in: [otel/flarelog-transport.ts:31](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/flarelog-transport.ts#L31)
+Defined in: [otel/flarelog-transport.ts:33](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/flarelog-transport.ts#L33)
 
 Human-readable name for debug logging.
 
@@ -60,7 +60,7 @@ Human-readable name for debug logging.
 
 > **exportLogs**(`logs`): `Promise`\<`void`\>
 
-Defined in: [otel/flarelog-transport.ts:59](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/flarelog-transport.ts#L59)
+Defined in: [otel/flarelog-transport.ts:63](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/flarelog-transport.ts#L63)
 
 Called by the LogRecordProcessor when a log record is emitted.
 
@@ -84,7 +84,7 @@ Called by the LogRecordProcessor when a log record is emitted.
 
 > **exportSpans**(`spans`): `Promise`\<`void`\>
 
-Defined in: [otel/flarelog-transport.ts:65](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/flarelog-transport.ts#L65)
+Defined in: [otel/flarelog-transport.ts:69](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/flarelog-transport.ts#L69)
 
 Called by the SpanProcessor when a span ends.
 
@@ -108,7 +108,7 @@ Called by the SpanProcessor when a span ends.
 
 > **flush**(): `Promise`\<`void`\>
 
-Defined in: [otel/flarelog-transport.ts:101](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/flarelog-transport.ts#L101)
+Defined in: [otel/flarelog-transport.ts:123](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/flarelog-transport.ts#L123)
 
 Force-flush any in-flight batches. Called on ctx.waitUntil().
 
@@ -126,7 +126,7 @@ Force-flush any in-flight batches. Called on ctx.waitUntil().
 
 > **shutdown**(): `Promise`\<`void`\>
 
-Defined in: [otel/flarelog-transport.ts:105](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/flarelog-transport.ts#L105)
+Defined in: [otel/flarelog-transport.ts:127](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/flarelog-transport.ts#L127)
 
 Release resources (timers, connections).
 

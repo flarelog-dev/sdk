@@ -8,7 +8,7 @@
 
 > **wrapWorker**(`logger`, `WorkerCtor`): (`scriptURL`, `options?`) => `Worker`
 
-Defined in: [workers.ts:95](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/workers.ts#L95)
+Defined in: [workers.ts:93](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/workers.ts#L93)
 
 ## Parameters
 

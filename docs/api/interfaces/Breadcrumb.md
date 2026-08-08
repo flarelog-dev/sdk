@@ -6,7 +6,7 @@
 
 # Interface: Breadcrumb
 
-Defined in: [types.ts:46](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L46)
+Defined in: [types.ts:48](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L48)
 
 Breadcrumb entry for tracking events leading to an error
 
@@ -16,7 +16,7 @@ Breadcrumb entry for tracking events leading to an error
 
 > **timestamp**: `string`
 
-Defined in: [types.ts:47](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L47)
+Defined in: [types.ts:49](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L49)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [types.ts:47](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe
 
 > **category**: `string`
 
-Defined in: [types.ts:48](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L48)
+Defined in: [types.ts:50](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L50)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [types.ts:48](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe
 
 > **message**: `string`
 
-Defined in: [types.ts:49](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L49)
+Defined in: [types.ts:51](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L51)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [types.ts:49](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe
 
 > `optional` **level?**: [`LogLevel`](../type-aliases/LogLevel.md)
 
-Defined in: [types.ts:50](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L50)
+Defined in: [types.ts:52](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L52)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: [types.ts:50](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe
 
 > `optional` **data?**: `Record`\<`string`, `unknown`\>
 
-Defined in: [types.ts:51](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L51)
+Defined in: [types.ts:53](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L53)

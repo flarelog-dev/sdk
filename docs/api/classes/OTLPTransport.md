@@ -6,7 +6,7 @@
 
 # Class: OTLPTransport
 
-Defined in: [otel/otlp-transport.ts:53](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/otlp-transport.ts#L53)
+Defined in: [otel/otlp-transport.ts:53](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/otlp-transport.ts#L53)
 
 OTLPTransport — ships telemetry to any OTLP/HTTP JSON endpoint.
 
@@ -34,7 +34,7 @@ new OTLPTransport({
 
 > **new OTLPTransport**(`config?`): `OTLPTransport`
 
-Defined in: [otel/otlp-transport.ts:64](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/otlp-transport.ts#L64)
+Defined in: [otel/otlp-transport.ts:64](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/otlp-transport.ts#L64)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [otel/otlp-transport.ts:64](https://github.com/flarelog-dev/sdk/blob
 
 > `readonly` **name**: `"otlp"` = `"otlp"`
 
-Defined in: [otel/otlp-transport.ts:54](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/otlp-transport.ts#L54)
+Defined in: [otel/otlp-transport.ts:54](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/otlp-transport.ts#L54)
 
 Human-readable name for debug logging.
 
@@ -66,7 +66,7 @@ Human-readable name for debug logging.
 
 > **exportLogs**(`logs`): `Promise`\<`void`\>
 
-Defined in: [otel/otlp-transport.ts:78](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/otlp-transport.ts#L78)
+Defined in: [otel/otlp-transport.ts:78](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/otlp-transport.ts#L78)
 
 Called by the LogRecordProcessor when a log record is emitted.
 
@@ -90,7 +90,7 @@ Called by the LogRecordProcessor when a log record is emitted.
 
 > **exportSpans**(`spans`): `Promise`\<`void`\>
 
-Defined in: [otel/otlp-transport.ts:84](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/otlp-transport.ts#L84)
+Defined in: [otel/otlp-transport.ts:84](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/otlp-transport.ts#L84)
 
 Called by the SpanProcessor when a span ends.
 
@@ -114,7 +114,7 @@ Called by the SpanProcessor when a span ends.
 
 > **flush**(): `Promise`\<`void`\>
 
-Defined in: [otel/otlp-transport.ts:131](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/otlp-transport.ts#L131)
+Defined in: [otel/otlp-transport.ts:132](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/otlp-transport.ts#L132)
 
 Force-flush any in-flight batches. Called on ctx.waitUntil().
 
@@ -132,7 +132,7 @@ Force-flush any in-flight batches. Called on ctx.waitUntil().
 
 > **shutdown**(): `Promise`\<`void`\>
 
-Defined in: [otel/otlp-transport.ts:136](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/otlp-transport.ts#L136)
+Defined in: [otel/otlp-transport.ts:137](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/otlp-transport.ts#L137)
 
 Release resources (timers, connections).
 

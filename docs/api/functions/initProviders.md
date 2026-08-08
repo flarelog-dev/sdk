@@ -8,7 +8,7 @@
 
 > **initProviders**(`opts`): `object`
 
-Defined in: [otel/providers.ts:173](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/providers.ts#L173)
+Defined in: [otel/providers.ts:298](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/providers.ts#L298)
 
 ## Parameters
 

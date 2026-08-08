@@ -6,7 +6,7 @@
 
 # Class: ConsoleTransport
 
-Defined in: [otel/console-transport.ts:75](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/console-transport.ts#L75)
+Defined in: [otel/console-transport.ts:75](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/console-transport.ts#L75)
 
 ConsoleTransport — pretty-prints telemetry to stdout/stderr.
 
@@ -33,7 +33,7 @@ Lets developers see exactly what would be shipped without any backend setup.
 
 > `readonly` **name**: `"console"` = `"console"`
 
-Defined in: [otel/console-transport.ts:76](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/console-transport.ts#L76)
+Defined in: [otel/console-transport.ts:76](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/console-transport.ts#L76)
 
 Human-readable name for debug logging.
 
@@ -47,7 +47,7 @@ Human-readable name for debug logging.
 
 > **exportLogs**(`logs`): `Promise`\<`void`\>
 
-Defined in: [otel/console-transport.ts:78](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/console-transport.ts#L78)
+Defined in: [otel/console-transport.ts:78](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/console-transport.ts#L78)
 
 Called by the LogRecordProcessor when a log record is emitted.
 
@@ -71,7 +71,7 @@ Called by the LogRecordProcessor when a log record is emitted.
 
 > **exportSpans**(`spans`): `Promise`\<`void`\>
 
-Defined in: [otel/console-transport.ts:95](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/console-transport.ts#L95)
+Defined in: [otel/console-transport.ts:95](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/console-transport.ts#L95)
 
 Called by the SpanProcessor when a span ends.
 
@@ -95,7 +95,7 @@ Called by the SpanProcessor when a span ends.
 
 > **flush**(): `Promise`\<`void`\>
 
-Defined in: [otel/console-transport.ts:104](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/console-transport.ts#L104)
+Defined in: [otel/console-transport.ts:104](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/console-transport.ts#L104)
 
 Force-flush any in-flight batches. Called on ctx.waitUntil().
 
@@ -113,7 +113,7 @@ Force-flush any in-flight batches. Called on ctx.waitUntil().
 
 > **shutdown**(): `Promise`\<`void`\>
 
-Defined in: [otel/console-transport.ts:108](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/otel/console-transport.ts#L108)
+Defined in: [otel/console-transport.ts:108](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/otel/console-transport.ts#L108)
 
 Release resources (timers, connections).
 

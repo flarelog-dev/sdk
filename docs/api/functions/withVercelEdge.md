@@ -10,7 +10,7 @@
 
 > **withVercelEdge**(`logger`, `handler`): [`VercelEdgeHandler`](../type-aliases/VercelEdgeHandler.md)
 
-Defined in: [frameworks/vercel.ts:193](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/frameworks/vercel.ts#L193)
+Defined in: [frameworks/vercel.ts:193](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/frameworks/vercel.ts#L193)
 
 Wrap a Vercel Edge Function or Edge Middleware handler with automatic OTel
 instrumentation.
@@ -75,7 +75,7 @@ export default withVercelEdge(logger, async (request) => {
 
 > **withVercelEdge**(`logger`, `handler`): [`VercelEdgeHandler`](../type-aliases/VercelEdgeHandler.md)
 
-Defined in: [frameworks/vercel.ts:197](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/frameworks/vercel.ts#L197)
+Defined in: [frameworks/vercel.ts:197](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/frameworks/vercel.ts#L197)
 
 Wrap a Vercel Edge Function or Edge Middleware handler with automatic OTel
 instrumentation.

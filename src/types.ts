@@ -2,6 +2,8 @@
  * Log severity levels following OpenTelemetry conventions.
  * Numeric severity values: TRACE=1, DEBUG=5, INFO=9, WARN=13, ERROR=17, FATAL=21.
  */
+import type { AIInstrumentationConfig } from "./ai/types";
+
 export type LogLevel = "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
 
 /**
@@ -200,6 +202,35 @@ export interface FlareLogConfig {
    * generate telemetry.
    */
   ignorePaths?: Array<string | RegExp | ((pathname: string) => boolean)>;
+
+  /**
+   * Enable AI inference observability with zero config.
+   *
+   * - `true`: activates global `fetch()` interception for OpenAI, Anthropic,
+   *   and other supported providers. Token usage, cost, latency, and errors
+   *   are captured automatically.
+   * - `false` / omitted: no AI instrumentation (default).
+   * - Object: full {@link AIInstrumentationConfig} for fine-grained control
+   *   (sample capture, price overrides, extra providers, etc.).
+   *
+   * When enabled, call `logger.disposeAI()` to remove instrumentation,
+   * or `logger.destroy()` to clean up everything at once.
+   *
+   * @example Zero-config
+   * ```ts
+   * const logger = flarelog({ apiKey, ai: true });
+   * // any fetch() to OpenAI/Anthropic is now captured
+   * ```
+   *
+   * @example Full config
+   * ```ts
+   * const logger = flarelog({
+   *   apiKey,
+   *   ai: { captureSamples: true, priceOverrides: { "gpt-4o": { input: 5, output: 15 } } },
+   * });
+   * ```
+   */
+  ai?: boolean | AIInstrumentationConfig;
 }
 
 /**

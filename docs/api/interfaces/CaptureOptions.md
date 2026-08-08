@@ -6,7 +6,7 @@
 
 # Interface: CaptureOptions
 
-Defined in: [types.ts:220](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L220)
+Defined in: [types.ts:305](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L305)
 
 Options for error capture methods
 
@@ -16,7 +16,7 @@ Options for error capture methods
 
 > `optional` **source?**: `string`
 
-Defined in: [types.ts:222](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L222)
+Defined in: [types.ts:307](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L307)
 
 Override the source tag for this capture
 
@@ -26,7 +26,7 @@ Override the source tag for this capture
 
 > `optional` **metadata?**: `Record`\<`string`, `unknown`\>
 
-Defined in: [types.ts:224](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L224)
+Defined in: [types.ts:309](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L309)
 
 Additional metadata to attach to error logs
 
@@ -36,7 +36,7 @@ Additional metadata to attach to error logs
 
 > `optional` **level?**: `"WARN"` \| `"ERROR"` \| `"FATAL"`
 
-Defined in: [types.ts:226](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L226)
+Defined in: [types.ts:311](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L311)
 
 Custom log level for captured errors. Defaults to "ERROR"
 
@@ -46,7 +46,7 @@ Custom log level for captured errors. Defaults to "ERROR"
 
 > `optional` **rethrow?**: `boolean`
 
-Defined in: [types.ts:228](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L228)
+Defined in: [types.ts:313](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L313)
 
 Whether to re-throw the error after logging. Defaults to true
 
@@ -56,6 +56,6 @@ Whether to re-throw the error after logging. Defaults to true
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:230](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L230)
+Defined in: [types.ts:315](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L315)
 
 A descriptive label for what operation was being attempted

@@ -8,6 +8,6 @@
 
 > **TransportConfig** = \{ `type`: `"console"`; \} \| \{ `type`: `"otlp"`; `endpoint?`: `string`; `logsEndpoint?`: `string`; `tracesEndpoint?`: `string`; `headers?`: `Record`\<`string`, `string`\>; `enableLogs?`: `boolean`; `enableTraces?`: `boolean`; \} \| \{ `type`: `"flarelog"`; `apiKey`: `string`; `endpoint?`: `string`; `enableTraces?`: `boolean`; \}
 
-Defined in: [types.ts:154](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L154)
+Defined in: [types.ts:239](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L239)
 
 Transport configuration — used in the `transports` array.

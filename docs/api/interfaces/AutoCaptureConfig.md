@@ -6,7 +6,7 @@
 
 # Interface: AutoCaptureConfig
 
-Defined in: [types.ts:175](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L175)
+Defined in: [types.ts:260](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L260)
 
 Automatic error capture configuration
 
@@ -16,7 +16,7 @@ Automatic error capture configuration
 
 > `optional` **console?**: `boolean` \| [`ConsoleCaptureOptions`](ConsoleCaptureOptions.md)
 
-Defined in: [types.ts:177](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L177)
+Defined in: [types.ts:262](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L262)
 
 Capture console.error / console.warn (and optionally more)
 
@@ -26,7 +26,7 @@ Capture console.error / console.warn (and optionally more)
 
 > `optional` **globalErrors?**: `boolean`
 
-Defined in: [types.ts:179](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L179)
+Defined in: [types.ts:264](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L264)
 
 Capture global/runtime error events
 
@@ -36,7 +36,7 @@ Capture global/runtime error events
 
 > `optional` **rejections?**: `boolean`
 
-Defined in: [types.ts:181](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L181)
+Defined in: [types.ts:266](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L266)
 
 Capture unhandled promise rejections
 
@@ -46,7 +46,7 @@ Capture unhandled promise rejections
 
 > `optional` **fetchHandler?**: `boolean`
 
-Defined in: [types.ts:183](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L183)
+Defined in: [types.ts:268](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L268)
 
 Enable worker fetch handler wrapper helpers. Not currently used.
 
@@ -56,7 +56,7 @@ Enable worker fetch handler wrapper helpers. Not currently used.
 
 > `optional` **worker?**: `boolean`
 
-Defined in: [types.ts:185](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L185)
+Defined in: [types.ts:270](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L270)
 
 Enable Web Worker wrapper helpers. Not currently used.
 
@@ -66,7 +66,7 @@ Enable Web Worker wrapper helpers. Not currently used.
 
 > `optional` **dedupWindowMs?**: `number`
 
-Defined in: [types.ts:187](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L187)
+Defined in: [types.ts:272](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L272)
 
 Deduplication window in milliseconds. Defaults to 5000
 
@@ -76,7 +76,7 @@ Deduplication window in milliseconds. Defaults to 5000
 
 > `optional` **navigation?**: `boolean`
 
-Defined in: [types.ts:189](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L189)
+Defined in: [types.ts:274](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L274)
 
 Capture navigation breadcrumbs. Not yet implemented.
 
@@ -86,7 +86,7 @@ Capture navigation breadcrumbs. Not yet implemented.
 
 > `optional` **http?**: `boolean`
 
-Defined in: [types.ts:191](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L191)
+Defined in: [types.ts:276](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L276)
 
 Capture fetch/XHR breadcrumbs and performance data. Not yet implemented.
 
@@ -96,6 +96,6 @@ Capture fetch/XHR breadcrumbs and performance data. Not yet implemented.
 
 > `optional` **clicks?**: `boolean`
 
-Defined in: [types.ts:193](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L193)
+Defined in: [types.ts:278](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L278)
 
 Capture DOM click breadcrumbs. Not yet implemented.

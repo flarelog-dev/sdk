@@ -8,7 +8,7 @@
 
 > **createWorkerFetchHandler**\<`T`\>(`logger`, `handler`): [`WorkerFetchHandler`](../type-aliases/WorkerFetchHandler.md)\<`T`\>
 
-Defined in: [workers.ts:17](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/workers.ts#L17)
+Defined in: [workers.ts:15](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/workers.ts#L15)
 
 Wrap a Cloudflare Worker fetch handler with automatic OTel instrumentation.
 

@@ -6,7 +6,7 @@
 
 # Interface: ExecutionContextLike
 
-Defined in: [types.ts:270](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L270)
+Defined in: [types.ts:355](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L355)
 
 Execution context shape used by Cloudflare Workers and similar runtimes.
 waitUntil is optional to allow graceful degradation in test/custom environments.
@@ -17,7 +17,7 @@ waitUntil is optional to allow graceful degradation in test/custom environments.
 
 > `optional` **waitUntil**(`promise`): `void`
 
-Defined in: [types.ts:271](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L271)
+Defined in: [types.ts:356](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L356)
 
 #### Parameters
 
@@ -35,7 +35,7 @@ Defined in: [types.ts:271](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94f
 
 > `optional` **passThroughOnException**(): `void`
 
-Defined in: [types.ts:272](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L272)
+Defined in: [types.ts:357](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L357)
 
 #### Returns
 

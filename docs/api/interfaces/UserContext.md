@@ -6,7 +6,7 @@
 
 # Interface: UserContext
 
-Defined in: [types.ts:36](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L36)
+Defined in: [types.ts:38](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L38)
 
 User context for identifying who experienced an error
 
@@ -20,7 +20,7 @@ User context for identifying who experienced an error
 
 > `optional` **id?**: `string`
 
-Defined in: [types.ts:37](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L37)
+Defined in: [types.ts:39](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L39)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [types.ts:37](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe
 
 > `optional` **email?**: `string`
 
-Defined in: [types.ts:38](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L38)
+Defined in: [types.ts:40](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L40)
 
 ***
 
@@ -36,4 +36,4 @@ Defined in: [types.ts:38](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe
 
 > `optional` **name?**: `string`
 
-Defined in: [types.ts:39](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/types.ts#L39)
+Defined in: [types.ts:41](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/types.ts#L41)

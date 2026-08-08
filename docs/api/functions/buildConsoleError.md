@@ -8,7 +8,7 @@
 
 > **buildConsoleError**(`args`): `Error`
 
-Defined in: [errors.ts:82](https://github.com/flarelog-dev/sdk/blob/b25f63c8f94fe20fac5abbce1af1e044d5a0a23a/src/errors.ts#L82)
+Defined in: [errors.ts:82](https://github.com/flarelog-dev/sdk/blob/5f9e53e5dc4a36dd2f648837fb2d65294f8414f2/src/errors.ts#L82)
 
 ## Parameters
 

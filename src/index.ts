@@ -59,6 +59,10 @@ export type {
   PagesFunctionContext,
 } from "./types";
 
+// AI observability (also available via @flarelog/sdk/ai)
+export { flarelogAI, wrapClient, wrap } from "./ai/index";
+export type { AIInstrumentationConfig, AIInstrumentationHandle } from "./ai/index";
+
 // Utilities
 export { shouldLog, getLevelValue } from "./levels";
 export {

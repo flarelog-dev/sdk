@@ -26,6 +26,8 @@ import { FlarelogTransport } from "./otel/flarelog-transport";
 import type { Transport } from "./otel/transport";
 import { createWorkerFetchHandler, wrapWorker } from "./workers";
 import { extractContext, injectContext, getActiveSpanContext, ensurePropagatorInstalled } from "./otel/propagation";
+import { instrumentFetch, uninstrumentFetch } from "./ai/fetch-interceptor";
+import type { AIInstrumentationConfig } from "./ai/types";
 
 /**
  * Map FlareLog levels to OTel severity numbers.
@@ -187,6 +189,7 @@ export class FlareLog {
   private dedup: DedupTracker;
   private consoleCleanup?: () => void;
   private globalCleanup?: () => void;
+  private aiCleanup?: () => void;
   private breadcrumbs: Breadcrumb[] = [];
   private user: UserContext | null = null;
   private tags: Map<string, string> = new Map();
@@ -307,6 +310,13 @@ export class FlareLog {
         errors: this.config.autoCapture.globalErrors,
         rejections: this.config.autoCapture.rejections,
       });
+    }
+
+    // --- Activate AI instrumentation if requested ---
+    if (config.ai) {
+      const aiConfig: AIInstrumentationConfig =
+        typeof config.ai === "object" ? config.ai : {};
+      this.aiCleanup = instrumentFetch(this, aiConfig);
     }
   }
 
@@ -844,7 +854,14 @@ export class FlareLog {
     return this.flushFn();
   }
 
+  disposeAI(): void {
+    this.aiCleanup?.();
+    this.aiCleanup = undefined;
+    uninstrumentFetch();
+  }
+
   destroy(): Promise<void> {
+    this.disposeAI();
     this.consoleCleanup?.();
     this.globalCleanup?.();
     return this.shutdownFn();
