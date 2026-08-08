@@ -71,7 +71,7 @@ await fetch("https://api.openai.com/v1/chat/completions", {
 });
 ```
 
-See the [AI Observability guide](docs/ai-observability/README.md) for the full docs.
+See the [AI Observability guide](docs/ai-observability/) for the full docs.
 
 ---
 
