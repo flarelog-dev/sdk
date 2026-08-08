@@ -460,9 +460,11 @@ async function instrumentedCall(
         if (isStream) {
           record.streamed = true;
           // processStreamResponse returns a NEW Response with a fresh body
-          // (the consumer branch of the tee). The original response.body is
-          // locked by the tee — we can't return it to the caller.
-          response = processStreamResponse(response, matcher, record);
+          // (the consumer branch of the tee) and a promise that resolves when
+          // the telemetry branch finishes parsing SSE chunks for token usage.
+          const { response: streamResponse, done } = processStreamResponse(response, matcher, record);
+          response = streamResponse;
+          await done;
         } else {
           await processJsonResponse(response, matcher, record, effectiveConfig.maxPromptSampleChars, (cs) => {
             completionSample = cs;
@@ -546,8 +548,8 @@ function processStreamResponse(
   response: Response,
   matcher: ProviderMatcher,
   record: AICallRecord
-): Response {
-  if (!response.body) return response;
+): { response: Response; done: Promise<void> } {
+  if (!response.body) return { response, done: Promise.resolve() };
 
   // Tee — both branches are independently readable.
   const [consumerBranch, telemetryBranch] = response.body.tee();
@@ -560,9 +562,10 @@ function processStreamResponse(
     headers: response.headers,
   });
 
-  // Read telemetry from our branch in the background. We don't await —
-  // the caller can start reading immediately.
-  void (async () => {
+  // Read telemetry from our branch. We return the promise so the caller
+  // can await it before emitting the log — this ensures token counts are
+  // populated. The consumer's Response is returned immediately regardless.
+  const done = (async () => {
     let chunkCount = 0;
     try {
       for await (const event of readSSEStream(telemetryBranch)) {
@@ -586,7 +589,7 @@ function processStreamResponse(
     record.latency.streamChunks = chunkCount;
   })();
 
-  return newResponse;
+  return { response: newResponse, done };
 }
 
 function mergeTokens(prev: AITokenUsage, delta: AITokenUsage): AITokenUsage {
