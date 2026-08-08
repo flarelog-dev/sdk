@@ -141,6 +141,10 @@ export default defineConfig({
     },
   },
 
+  sitemap: {
+    hostname: 'https://docs.flarelog.dev',
+  },
+
   markdown: {
     lineNumbers: true,
     theme: {
