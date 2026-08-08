@@ -17,6 +17,11 @@ features:
   - icon: "0"
     title: Zero Dependencies
     details: No external runtime deps. Lightweight and fast for any JavaScript runtime — Node, Workers, Edge, browser.
+  - icon: "AI"
+    title: AI Inference Observability
+    details: Zero-config token, cost, and latency tracking for OpenAI, Anthropic, Workers AI, Vercel AI SDK, and any OpenAI-compatible gateway.
+    link: /ai-observability/
+    linkText: View AI docs
   - icon: "{ }"
     title: Core API
     details: Complete logging, error handling, child loggers, breadcrumbs, sampling, and beforeSend hooks.

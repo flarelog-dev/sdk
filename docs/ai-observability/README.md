@@ -69,6 +69,10 @@ Each call now produces:
 - An OTel span named `chat <model>` with `gen_ai.*` semantic attributes
 - A structured log entry with `flarelog.kind: "ai_call"` containing the full `AICallRecord`
 
+Then open the **AI observability dashboard** at [flarelog.dev/ai-observability](https://flarelog.dev/ai-observability) to see tokens, cost, latency, and errors for every call — no querying needed.
+
+> **Streaming?** For OpenAI-compatible providers, set `stream_options: { include_usage: true }` on streaming requests so token counts are captured. Anthropic and Workers AI capture usage automatically. See [Streaming & Token Usage](streaming-tokens).
+
 ## How fetch interception works
 
 FlareLog uses an **inert pre-wrapper** pattern to ensure interception works even when AI SDK clients (OpenAI, Anthropic) are constructed before `flarelogAI()` is called.
@@ -397,7 +401,7 @@ The fetch interceptor adds <1ms overhead per AI call (measured on a 100-call ben
 5. Cost calculation — ~0.01ms
 6. Log emission — ~0.05ms
 
-For streaming responses, the body is `tee()`'d once (zero-copy), and SSE parsing happens in a background promise that doesn't block the consumer.
+For streaming responses, the body is `tee()`'d once (zero-copy). The SSE parsing runs while the consumer reads the response — the caller's stream is never delayed — but the SDK **awaits** the telemetry parse before emitting the log, so token counts are complete by the time the log ships.
 
 **When inactive** (before `flarelogAI()` or never called), the inert pre-wrapper adds ~2-5ns per fetch call — a single null check on a closure variable. The wrapper is non-async to avoid Promise allocation overhead.
 

@@ -24,6 +24,7 @@ export default defineConfig({
 
     nav: [
       { text: 'Getting Started', link: '/getting-started/installation' },
+      { text: 'AI Observability', link: '/ai-observability/' },
       { text: 'Core API', link: '/core-api/' },
       { text: 'Guides', link: '/guides/nodejs' },
       { text: 'Platforms', link: '/platforms/cloudflare-workers' },
@@ -40,6 +41,15 @@ export default defineConfig({
     ],
 
     sidebar: {
+      '/ai-observability/': [
+        {
+          text: 'AI Observability',
+          items: [
+            { text: 'Overview', link: '/ai-observability/' },
+            { text: 'Streaming & Tokens', link: '/ai-observability/streaming-tokens' },
+          ]
+        }
+      ],
       '/getting-started/': [
         {
           text: 'Getting Started',
