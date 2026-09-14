@@ -820,7 +820,19 @@ export class FlareLog {
         if (captureErrors) {
           const nodeOnError = (err: Error) => {
             this.captureAutomatic(err, "global", "Uncaught exception");
-            (process.exit as (code?: number) => void)(1);
+            // Registering this listener replaces Node's default crash
+            // behaviour, so we must re-establish it: exit non-zero. But the
+            // captured error is still sitting in the batch queue at this
+            // point — flush first (with a hard deadline so a hung backend
+            // can't keep a crashed process alive), then exit.
+            const exit = () => (process.exit as (code?: number) => void)(1);
+            const deadline = setTimeout(exit, 2000);
+            this.flush()
+              .catch(() => {})
+              .finally(() => {
+                clearTimeout(deadline);
+                exit();
+              });
           };
           process.on("uncaughtException", nodeOnError);
           handlers.push(() => (process.off as (...args: unknown[]) => void)("uncaughtException", nodeOnError));

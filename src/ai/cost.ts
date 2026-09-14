@@ -19,6 +19,11 @@ import { lookupPrice } from "./cost-table";
  * The result is rounded to 8 decimal places to avoid float-precision noise
  * in dashboards (e.g. 0.0001234000000001 → 0.00012340).
  *
+ * Counter semantics: for OpenAI-style providers, `usage.input` (prompt_tokens)
+ * INCLUDES `usage.cachedInput`, and `usage.output` (completion_tokens) INCLUDES
+ * `usage.reasoning` — the subsets are subtracted before billing so tokens are
+ * never charged twice. Anthropic reports disjoint counters and is billed as-is.
+ *
  * @param model   Model name as returned by the provider.
  * @param provider Provider name (for fallback price lookup).
  * @param usage   Token usage breakdown.
@@ -46,10 +51,20 @@ export function computeCost(
 
   let cost = 0;
 
-  // Input tokens — split into fresh vs cached (cached billed at discount).
-  const freshInput = usage.input ?? 0;
   const cachedInput = usage.cachedInput ?? 0;
   const cacheCreation = usage.cacheCreationInput ?? 0;
+  const reasoning = usage.reasoning ?? 0;
+
+  // OpenAI-style providers (including OpenAI-compatible gateways and the
+  // catalog providers, which all reuse the OpenAI parser) report INCLUSIVE
+  // counters: `prompt_tokens` already contains `cached_tokens`, and
+  // `completion_tokens` already contains `reasoning_tokens`. Billing both
+  // the total and the subset would double-count. Anthropic reports
+  // DISJOINT counters (`input_tokens` excludes cache_read/cache_creation,
+  // and there is no separate reasoning field), so no subtraction applies.
+  const inclusive = provider !== "anthropic";
+  const freshInput = Math.max(0, (usage.input ?? 0) - (inclusive ? cachedInput : 0));
+  const plainOutput = Math.max(0, (usage.output ?? 0) - (inclusive ? reasoning : 0));
 
   cost += (freshInput * price.input) / PER_MILLION;
 
@@ -68,15 +83,14 @@ export function computeCost(
     cost += (cacheCreation * price.input * 1.25) / PER_MILLION;
   }
 
-  // Output tokens
-  const output = usage.output ?? 0;
-  if (output > 0) {
-    cost += (output * price.output) / PER_MILLION;
+  // Output tokens — excluding reasoning tokens for inclusive providers
+  // (reasoning is a subset of `output` and billed separately below).
+  if (plainOutput > 0) {
+    cost += (plainOutput * price.output) / PER_MILLION;
   }
 
   // Reasoning tokens — billed at output rate by default, but o1/o3 series
   // has explicit reasoning rates.
-  const reasoning = usage.reasoning ?? 0;
   if (reasoning > 0) {
     const reasoningRate = price.reasoning ?? price.output;
     cost += (reasoning * reasoningRate) / PER_MILLION;
@@ -86,7 +100,7 @@ export function computeCost(
   cost *= multiplier;
 
   // Don't emit a $0 cost when there were genuinely no tokens — that's noise.
-  if (cost === 0 && freshInput === 0 && output === 0 && cachedInput === 0 && reasoning === 0 && cacheCreation === 0) {
+  if (cost === 0 && freshInput === 0 && plainOutput === 0 && cachedInput === 0 && reasoning === 0 && cacheCreation === 0) {
     return undefined;
   }
 

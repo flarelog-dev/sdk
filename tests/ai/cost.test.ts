@@ -78,9 +78,11 @@ describe("computeCost", () => {
 
   it("combines all token types correctly", () => {
     // gpt-4o: $2.5 input, $1.25 cached, $10 output
+    // OpenAI counters are inclusive: input=500 contains cached=200,
+    // output=300 contains reasoning=100 → fresh input = 300, plain output = 200.
     // gpt-4o has no explicit reasoning rate → falls back to output rate ($10)
-    // 500 input + 200 cached + 300 output + 100 reasoning
-    // = $0.00125 + $0.00025 + $0.003 + $0.001 = $0.0055
+    // = 300*2.5 + 200*1.25 + 200*10 + 100*10 (per 1M)
+    // = $0.00075 + $0.00025 + $0.002 + $0.001 = $0.004
     const cost = computeCost(
       "gpt-4o",
       "openai",
@@ -92,7 +94,36 @@ describe("computeCost", () => {
       },
       "chat"
     );
-    expect(cost).toBeCloseTo(0.0055, 6);
+    expect(cost).toBeCloseTo(0.004, 6);
+  });
+
+  it("does not double-count OpenAI cached tokens (prompt_tokens includes cached_tokens)", () => {
+    // gpt-4o: $2.5 input, $1.25 cached.
+    // prompt_tokens=1000 with cached_tokens=800 → fresh 200*2.5 + cached 800*1.25
+    // = 500 + 1000 = 1500 → $0.0015 (NOT 1000*2.5 + 800*1.25 = $0.0035)
+    const cost = computeCost("gpt-4o", "openai", { input: 1000, cachedInput: 800 }, "chat");
+    expect(cost).toBeCloseTo(0.0015, 8);
+  });
+
+  it("does not double-count OpenAI reasoning tokens (completion_tokens includes reasoning)", () => {
+    // o1: $60 output (no explicit reasoning rate → output rate).
+    // completion_tokens=500 with reasoning_tokens=200 → plain 300*60 + reasoning 200*60
+    // = 18000 + 12000 = 30000 → $0.03 (same as 500*60 — no double count)
+    const cost = computeCost("o1", "openai", { output: 500, reasoning: 200 }, "chat");
+    expect(cost).toBeCloseTo(0.03, 8);
+  });
+
+  it("treats Anthropic counters as disjoint (input_tokens excludes cache tokens)", () => {
+    // claude-3-5-sonnet: $3 input, $0.30 cached, $15 output.
+    // Anthropic reports input_tokens EXCLUDING cache_read_input_tokens →
+    // 100*3 + 800*0.3 + 50*15 = 300 + 240 + 750 = 1290 → $0.00129
+    const cost = computeCost(
+      "claude-3-5-sonnet",
+      "anthropic",
+      { input: 100, cachedInput: 800, output: 50 },
+      "chat"
+    );
+    expect(cost).toBeCloseTo(0.00129, 8);
   });
 
   it("applies cost multiplier", () => {

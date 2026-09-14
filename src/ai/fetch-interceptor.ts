@@ -51,6 +51,7 @@ import { computeCost } from "./cost";
 import { PROVIDER_HOSTS } from "./cost-table";
 import { readSSEStream, isStreamDone } from "./sse";
 import { attachRecordToSpan, recordToLogAttributes } from "./span-attributes";
+import { activeContext, setSpan, withContext } from "../otel/context";
 
 const MATCHERS: ProviderMatcher[] = [openaiMatcher, anthropicMatcher, genericMatcher];
 
@@ -374,12 +375,11 @@ async function instrumentedCall(
   // Build the request we'll actually send (with traceparent injected).
   let finalInit = init;
   if (effectiveConfig.propagateTrace) {
-    finalInit = injectTraceparent(init, logger);
+    finalInit = injectTraceparent(input, init, logger);
   }
 
   // Capture optional prompt sample.
   let promptSample: string | undefined;
-  let completionSample: string | undefined;
   if (effectiveConfig.captureSamples && body && typeof body === "object") {
     promptSample = extractPromptSample(body as Record<string, unknown>, effectiveConfig.maxPromptSampleChars);
   }
@@ -397,136 +397,166 @@ async function instrumentedCall(
   //   chat <model>   |   embedding <model>   |   etc.
   const spanName = `${operation} ${model}`;
 
-  // Use logger.startSpan so logs emitted inside the handler get correlated.
-  return logger.startSpan(
-    spanName,
-    async (span) => {
-      span.setAttribute("gen_ai.provider.name", matcher.name);
-      span.setAttribute("gen_ai.request.model", model);
-      span.setAttribute("gen_ai.operation.name", operation);
-      span.setAttribute("flarelog.ai.url", urlStr);
+  // The span lifecycle is managed manually here (instead of logger.startSpan)
+  // so the streaming path can return the response to the caller immediately
+  // and finalize telemetry only when the stream completes. Awaiting telemetry
+  // inside the fetch would buffer the entire stream before the caller's
+  // `await fetch(...)` resolves — defeating streaming entirely.
+  const span = logger.tracerProvider
+    .getTracer("flarelog", "2.0.0")
+    .startSpan(spanName, { kind: 2 /* SpanKind.CLIENT */ });
 
-      if (promptSample) {
-        span.setAttribute("flarelog.ai.prompt_sample", promptSample);
+  span.setAttribute("gen_ai.provider.name", matcher.name);
+  span.setAttribute("gen_ai.request.model", model);
+  span.setAttribute("gen_ai.operation.name", operation);
+  span.setAttribute("flarelog.ai.url", urlStr);
+
+  if (promptSample) {
+    span.setAttribute("flarelog.ai.prompt_sample", promptSample);
+  }
+
+  // Activate the span for the duration of the call so nested logs correlate,
+  // and keep the context around for deferred (post-stream) emission below.
+  const spanCtx = setSpan(activeContext(), span);
+
+  /** Derive total latency, tokens/sec, and cost once token counts are known. */
+  const finalizeRecord = (): void => {
+    record.latency.total = Date.now() - startTime;
+    if (record.tokens.output && record.latency.total && record.latency.total > 0) {
+      const genTime = record.latency.total - (record.latency.ttfb ?? 0);
+      if (genTime > 0) {
+        record.latency.tokensPerSecond = (record.tokens.output / genTime) * 1000;
       }
-
-      let response: Response;
-      let ttfb: number;
-
-      try {
-        // Fire the request through the passthrough fetch (bypasses our interceptor).
-        response = await passthroughFetch(input as RequestInfo | URL, finalInit);
-        ttfb = Date.now() - startTime;
-        record.latency.ttfb = ttfb;
-        record.status = response.status;
-        record.requestId = extractRequestId(matcher.name, response);
-
-        if (!response.ok) {
-          // Error response — try to parse body for error type.
-          let errorBody: unknown;
-          try {
-            errorBody = await response.clone().json();
-          } catch {
-            try {
-              errorBody = await response.clone().text();
-            } catch {
-              errorBody = undefined;
-            }
-          }
-          const parsed = matcher.parseError?.(response.status, errorBody);
-          record.errorType = parsed?.type;
-          record.errorMessage = parsed?.message;
-          record.latency.total = Date.now() - startTime;
-
-          attachRecordToSpan(span, record);
-          span.setStatus({
-            code: 2, // SpanStatusCode.ERROR
-            message: record.errorMessage ?? `HTTP ${response.status}`,
-          });
-          span.recordException(new Error(record.errorMessage ?? `HTTP ${response.status}`));
-
-          logger.error(`AI call failed: ${model}`, {
-            "flarelog.ai.record": record,
-            "flarelog.kind": "ai_call",
-            "flarelog.ai.error": true,
-          });
-
-          return response;
-        }
-
-        // Success — parse usage from response.
-        const isStream = response.headers.get("content-type")?.includes("text/event-stream");
-
-        if (isStream) {
-          record.streamed = true;
-          // processStreamResponse returns a NEW Response with a fresh body
-          // (the consumer branch of the tee) and a promise that resolves when
-          // the telemetry branch finishes parsing SSE chunks for token usage.
-          const { response: streamResponse, done } = processStreamResponse(response, matcher, record);
-          response = streamResponse;
-          await done;
-        } else {
-          await processJsonResponse(response, matcher, record, effectiveConfig.maxPromptSampleChars, (cs) => {
-            completionSample = cs;
-          });
-        }
-
-        record.latency.total = Date.now() - startTime;
-
-        // Compute tokens/sec for output if we have it.
-        if (record.tokens.output && record.latency.total && record.latency.total > 0) {
-          const genTime = record.latency.total - (record.latency.ttfb ?? 0);
-          if (genTime > 0) {
-            record.latency.tokensPerSecond = (record.tokens.output / genTime) * 1000;
-          }
-        }
-
-        // Compute cost.
-        record.costUsd = computeCost(
-          model,
-          matcher.name as AIProvider,
-          record.tokens,
-          operation,
-          config.priceOverrides,
-          effectiveConfig.costMultiplier
-        );
-
-        if (completionSample) {
-          span.setAttribute("flarelog.ai.completion_sample", completionSample);
-        }
-
-        attachRecordToSpan(span, record);
-
-        // Structured log entry — gives the dashboard full-text search.
-logger.info(`AI call: ${model}`, {
-          "flarelog.ai.record": record,
-          "flarelog.kind": "ai_call",
-          ...recordToLogAttributes(record),
-        });
-
-        return response;
-      } catch (err) {
-        record.latency.total = Date.now() - startTime;
-        record.errorType = err instanceof Error ? err.name : "Error";
-        record.errorMessage = err instanceof Error ? err.message : String(err);
-
-        attachRecordToSpan(span, record);
-        span.recordException(err as Error);
-
-logger.error(`AI call exception: ${model}`, {
-          "flarelog.ai.record": record,
-          "flarelog.kind": "ai_call",
-          "flarelog.ai.error": true,
-          ...recordToLogAttributes(record),
-        });
-
-        throw err;
-      }
-    },
-    {
-      kind: 2, // SpanKind.CLIENT
     }
-  );
+    record.costUsd = computeCost(
+      model,
+      matcher.name as AIProvider,
+      record.tokens,
+      operation,
+      config.priceOverrides,
+      effectiveConfig.costMultiplier
+    );
+  };
+
+  /** End the span and emit the structured success log (best-effort flush). */
+  const emitSuccess = (completionSample: string | undefined): void => {
+    if (completionSample) {
+      span.setAttribute("flarelog.ai.completion_sample", completionSample);
+    }
+    attachRecordToSpan(span, record);
+    span.end();
+    // Re-enter the span context synchronously so the log carries
+    // traceId + spanId even when emitted after the stream finished
+    // (StackContextManager environments lose the context across awaits).
+    withContext(spanCtx, () => {
+      logger.info(`AI call: ${model}`, {
+        "flarelog.ai.record": record,
+        "flarelog.kind": "ai_call",
+        ...recordToLogAttributes(record),
+      });
+    });
+    void logger.flush().catch(() => {});
+  };
+
+  /** End the span with ERROR status and emit the structured failure log. */
+  const emitFailure = (logMessage: string, statusMessage: string): void => {
+    attachRecordToSpan(span, record);
+    span.setStatus({ code: 2 /* SpanStatusCode.ERROR */, message: statusMessage });
+    span.end();
+    withContext(spanCtx, () => {
+      logger.error(logMessage, {
+        "flarelog.ai.record": record,
+        "flarelog.kind": "ai_call",
+        "flarelog.ai.error": true,
+        ...recordToLogAttributes(record),
+      });
+    });
+    void logger.flush().catch(() => {});
+  };
+
+  return withContext(spanCtx, async () => {
+    let response: Response;
+
+    try {
+      // Fire the request through the passthrough fetch (bypasses our interceptor).
+      response = await passthroughFetch(input as RequestInfo | URL, finalInit);
+    } catch (err) {
+      record.latency.total = Date.now() - startTime;
+      record.errorType = err instanceof Error ? err.name : "Error";
+      record.errorMessage = err instanceof Error ? err.message : String(err);
+      span.recordException(err as Error);
+      emitFailure(
+        `AI call exception: ${model}`,
+        err instanceof Error ? err.message : String(err)
+      );
+      throw err;
+    }
+
+    record.latency.ttfb = Date.now() - startTime;
+    record.status = response.status;
+    record.requestId = extractRequestId(matcher.name, response);
+
+    if (!response.ok) {
+      // Error response — try to parse body for error type.
+      let errorBody: unknown;
+      try {
+        errorBody = await response.clone().json();
+      } catch {
+        try {
+          errorBody = await response.clone().text();
+        } catch {
+          errorBody = undefined;
+        }
+      }
+      const parsed = matcher.parseError?.(response.status, errorBody);
+      record.errorType = parsed?.type;
+      record.errorMessage = parsed?.message;
+      record.latency.total = Date.now() - startTime;
+      span.recordException(new Error(record.errorMessage ?? `HTTP ${response.status}`));
+      emitFailure(
+        `AI call failed: ${model}`,
+        record.errorMessage ?? `HTTP ${response.status}`
+      );
+      return response;
+    }
+
+    // Success — parse usage from response.
+    const isStream = response.headers.get("content-type")?.includes("text/event-stream");
+
+    if (isStream) {
+      record.streamed = true;
+      // processStreamResponse returns a NEW Response with a fresh body
+      // (the consumer branch of the tee) and a promise that resolves when
+      // the telemetry branch finishes parsing SSE chunks for token usage.
+      const { response: streamResponse, done } = processStreamResponse(response, matcher, record);
+
+      // Do NOT await `done` here — return the consumer branch immediately so
+      // the caller can read chunks as they arrive. Telemetry (tokens, cost,
+      // span end, structured log) is finalized in the background when the
+      // stream completes or the consumer cancels it. The flush is
+      // fire-and-forget; on Workers, delivery of tail telemetry after the
+      // response has fully streamed is best-effort.
+      void done.then(() => {
+        finalizeRecord();
+        emitSuccess(undefined);
+      });
+
+      return streamResponse;
+    }
+
+    let completionSample: string | undefined;
+    try {
+      await processJsonResponse(response, matcher, record, effectiveConfig.maxPromptSampleChars, (cs) => {
+        completionSample = cs;
+      });
+    } catch {
+      // Telemetry parse failure must never break the caller's response.
+    }
+
+    finalizeRecord();
+    emitSuccess(completionSample);
+    return response;
+  });
 }
 
 /**
@@ -536,10 +566,11 @@ logger.error(`AI call exception: ${model}`, {
  * scenes, we've tee'd the original body: one branch feeds the new Response
  * (untouched), the other is consumed by us for telemetry.
  *
- * The telemetry read happens in the background — we don't block the caller
- * from starting to consume the stream. By the time the span ends (in the
- * `finally` of startSpan), telemetry may still be in flight; we rely on the
- * logger's batch processor + end-of-request flush to deliver it.
+ * The telemetry read happens in the background — the caller receives the
+ * consumer branch immediately and can start reading chunks right away. The
+ * span is ended and the structured log is emitted when the `done` promise
+ * resolves (stream fully consumed, or consumer cancelled), followed by a
+ * fire-and-forget flush.
  *
  * Important: this MUST be called before the caller reads `response.body`.
  * Calling `response.body.getReader()` would lock the body and break the tee.
@@ -661,40 +692,36 @@ function extractRequestId(provider: string, response: Response): string | undefi
  *
  * Uses the logger's `injectTraceContext` method, which walks the active
  * OTel context and writes the `traceparent` (and `tracestate`) headers.
+ *
+ * IMPORTANT: per the fetch spec, passing `{ headers }` as init alongside a
+ * `Request` input REPLACES that Request's headers entirely. We therefore
+ * seed the new Headers from the existing ones (init.headers first, then the
+ * Request's own headers) so nothing — Authorization, Content-Type, provider
+ * beta flags — is dropped.
  */
-function injectTraceparent(init: RequestInit | undefined, logger: FlareLog): RequestInit | undefined {
+function injectTraceparent(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  logger: FlareLog
+): RequestInit | undefined {
+  let headers: Headers;
+  try {
+    headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined)
+    );
+  } catch {
+    // Unparseable headers init — fall back to a fresh Headers so we never
+    // break the call; worst case the original (odd) headers are passed
+    // through by the `!init` spread below... which can't happen, so just
+    // proceed with traceparent only.
+    headers = new Headers();
+  }
+  logger.injectTraceContext(headers);
+
   if (!init) {
-    // Create a new init with just the trace headers.
-    const headers = new Headers();
-    logger.injectTraceContext(headers);
     return { headers };
   }
-
-  // Clone init (shallow) so we don't mutate the caller's object.
-  const newInit: RequestInit = { ...init };
-
-  if (init.headers instanceof Headers) {
-    const headers = new Headers(init.headers);
-    logger.injectTraceContext(headers);
-    newInit.headers = headers;
-  } else if (init.headers && typeof init.headers === "object") {
-    const headers = new Headers(init.headers as Record<string, string>);
-    logger.injectTraceContext(headers);
-    newInit.headers = headers;
-  } else if (typeof init.headers === "string") {
-    // raw string headers — convert to Headers
-    const headers = new Headers();
-    logger.injectTraceContext(headers);
-    // Preserve the raw string by appending — best effort.
-    headers.append("x-original-headers", init.headers);
-    newInit.headers = headers;
-  } else {
-    const headers = new Headers();
-    logger.injectTraceContext(headers);
-    newInit.headers = headers;
-  }
-
-  return newInit;
+  return { ...init, headers };
 }
 
 /**

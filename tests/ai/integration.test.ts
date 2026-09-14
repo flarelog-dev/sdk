@@ -99,7 +99,8 @@ describe("flarelogAI end-to-end", () => {
     expect(record.provider).toBe("openai");
     expect(record.model).toBe("gpt-4o-2024-08-06"); // Updated from server response
     expect(record.tokens).toEqual({ input: 10, output: 5, cachedInput: 4 });
-    expect(record.costUsd).toBeCloseTo(0.00008, 8); // 10*2.5/1M + 4*1.25/1M + 5*10/1M = $0.00008
+    // OpenAI prompt_tokens INCLUDES cached_tokens → fresh = 10-4 = 6.
+    expect(record.costUsd).toBeCloseTo(0.00007, 8); // 6*2.5/1M + 4*1.25/1M + 5*10/1M = $0.00007
     expect(record.requestId).toBe("req_test_123");
     expect(record.status).toBe(200);
     expect(record.latency.total).toBeGreaterThanOrEqual(0);
@@ -183,6 +184,108 @@ describe("flarelogAI end-to-end", () => {
     expect(record.streamed).toBe(true);
     expect(record.tokens).toEqual({ input: 5, output: 2 });
     expect(record.latency.streamChunks).toBeGreaterThan(0);
+  });
+
+  it("returns streaming responses immediately, finalizing telemetry in the background", async () => {
+    const FINAL_CHUNK_DELAY = 300;
+    const enc = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n'));
+        setTimeout(() => {
+          controller.enqueue(enc.encode('data: {"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":2}}\n\n'));
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          controller.close();
+        }, FINAL_CHUNK_DELAY);
+      },
+    });
+    __setPassthroughFetch(
+      vi.fn().mockImplementation(async () =>
+        new Response(stream, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        })
+      ) as unknown as typeof fetch
+    );
+
+    const logger = flarelog({ warnOnConsoleFallback: false });
+    logger.info = (message: string, metadata?: Record<string, unknown>) => {
+      loggedEntries.push({ level: "info", message, metadata: metadata ?? {} });
+    };
+    flarelogAI(logger);
+
+    const t0 = Date.now();
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: "Bearer sk-test" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        stream: true,
+        messages: [{ role: "user", content: "Say hi" }],
+      }),
+    });
+    const tResolve = Date.now() - t0;
+
+    // fetch() must resolve when headers arrive — NOT after the full stream.
+    expect(tResolve).toBeLessThan(FINAL_CHUNK_DELAY);
+
+    // The first chunk is readable immediately, while the upstream is still open.
+    const reader = response.body!.getReader();
+    const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toContain("Hi");
+    expect(Date.now() - t0).toBeLessThan(FINAL_CHUNK_DELAY);
+
+    // No telemetry yet — the stream hasn't completed.
+    expect(loggedEntries.filter((e) => e.metadata["flarelog.kind"] === "ai_call")).toHaveLength(0);
+
+    // Drain the rest so the telemetry branch completes.
+    while (!(await reader.read()).done) { /* drain */ }
+
+    // Background finalization happens once the stream completes.
+    await vi.waitFor(() => {
+      const aiEntries = loggedEntries.filter((e) => e.metadata["flarelog.kind"] === "ai_call");
+      expect(aiEntries).toHaveLength(1);
+      const record = aiEntries[0].metadata["flarelog.ai.record"] as Record<string, unknown>;
+      expect(record.tokens).toEqual({ input: 5, output: 2 });
+      expect(record.streamed).toBe(true);
+    }, { timeout: 2000 });
+  });
+
+  it("preserves Request headers when injecting traceparent", async () => {
+    let seenHeaders: Headers | null = null;
+    __setPassthroughFetch(
+      vi.fn().mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        // Mirror the real fetch(Request, init) merge semantics.
+        seenHeaders = new Request(input as RequestInfo, init).headers;
+        return new Response(
+          JSON.stringify({ model: "gpt-4o", usage: { prompt_tokens: 1, completion_tokens: 1 } }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }) as unknown as typeof fetch
+    );
+
+    const logger = flarelog({ warnOnConsoleFallback: false });
+    logger.info = () => {};
+    flarelogAI(logger);
+
+    // Caller passes a Request object (no init) — its headers must survive
+    // traceparent injection (previously they were replaced entirely).
+    const req = new Request("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer sk-secret",
+        "content-type": "application/json",
+        "openai-beta": "assistants=v2",
+      },
+      body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: "hi" }] }),
+    });
+    const response = await fetch(req);
+
+    expect(response.status).toBe(200);
+    expect(seenHeaders).not.toBeNull();
+    expect(seenHeaders!.get("authorization")).toBe("Bearer sk-secret");
+    expect(seenHeaders!.get("content-type")).toBe("application/json");
+    expect(seenHeaders!.get("openai-beta")).toBe("assistants=v2");
   });
 
   it("captures errors and still throws", async () => {
