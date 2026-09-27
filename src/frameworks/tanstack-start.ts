@@ -1,13 +1,14 @@
 import type { FlareLog, FlareLogChild } from "../client";
 import {
   autoLogger,
-  __resetAutoLoggerCache,
   resolveWorkerEnv,
 } from "./auto-logger";
 import { createMiddleware } from "@tanstack/react-start";
 
 // Re-export so existing imports from `@flarelog/sdk/tanstack-start` still work.
-export { autoLogger, resolveWorkerEnv, __resetAutoLoggerCache };
+// `__resetAutoLoggerCache` is intentionally not re-exported — it is a test-only
+// hook and has no business in the published API surface.
+export { autoLogger, resolveWorkerEnv };
 
 type RequestLike = {
   method: string;

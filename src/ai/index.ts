@@ -155,7 +155,7 @@ export function wrapClient<T extends { fetch?: (...args: unknown[]) => unknown }
   if (!originalFetchRef) return client;
 
   (client as Record<string, unknown>).fetch = function (this: unknown, ...args: unknown[]) {
-    return (globalThis.fetch as (...a: unknown[]) => unknown).apply(undefined, args);
+    return (globalThis.fetch as (...a: unknown[]) => unknown)(...args);
   };
 
   return client;
@@ -251,7 +251,10 @@ function extractUsageFromResult(result: unknown, record: AICallRecord): void {
 }
 
 // Re-export everything that's part of the public API.
-export { instrumentFetch, uninstrumentFetch, __setPassthroughFetch, __resetInterceptorState } from "./fetch-interceptor";
+// `__setPassthroughFetch` / `__resetInterceptorState` are deliberately NOT
+// re-exported: they are test-only hooks, and calling `__resetInterceptorState`
+// makes the next `fetch()` recurse into itself until the stack overflows.
+export { instrumentFetch, uninstrumentFetch } from "./fetch-interceptor";
 export { wrapWorkersAI } from "./providers/workers-ai";
 export { openaiMatcher } from "./providers/openai";
 export { anthropicMatcher } from "./providers/anthropic";

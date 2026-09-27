@@ -57,9 +57,8 @@ import {
   withTanStackStart,
   autoLogger,
   resolveWorkerEnv,
-  __resetAutoLoggerCache,
 } from "../src/frameworks/tanstack-start";
-import { __setCloudflareEnvForTests } from "../src/frameworks/auto-logger";
+import { __setCloudflareEnvForTests, __resetAutoLoggerCache } from "../src/frameworks/auto-logger";
 
 interface BuilderStub {
   _serverFn: ((ctx: unknown) => Promise<unknown>) | null;

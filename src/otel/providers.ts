@@ -12,6 +12,8 @@ export interface ProviderOptions {
   workerMode?: boolean;
   maxQueueSize?: number;
   scheduledDelayMillis?: number;
+  /** Invoked when records are dropped after repeated export failures. */
+  onDrop?: (droppedCount: number) => void;
 }
 
 class TransportSpanExporter implements SpanExporter {
@@ -44,7 +46,7 @@ class SimpleSpanProcessor {
     await promise;
   }
   async forceFlush(): Promise<void> { 
-    await Promise.all(this.inFlight);
+    await Promise.allSettled(this.inFlight);
     await this.exporter.forceFlush(); 
   }
   async shutdown(): Promise<void> { await this.exporter.shutdown(); }
@@ -55,14 +57,17 @@ class BatchSpanProcessor {
   private timer?: ReturnType<typeof setInterval>;
   private readonly maxQueueSize: number;
   private readonly scheduledDelayMillis: number;
+  private readonly onDrop: (droppedCount: number) => void;
+  private flushScheduled = false;
   private exporter: TransportSpanExporter;
   private retryCount: number = 0;
   private readonly maxRetries: number = 3;
   private flushPromise: Promise<void> = Promise.resolve();
 
-  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number; debug?: boolean }) {
+  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number; debug?: boolean; onDrop?: (n: number) => void }) {
     this.maxQueueSize = opts.maxQueueSize;
     this.scheduledDelayMillis = opts.scheduledDelayMillis;
+    this.onDrop = opts.onDrop ?? (() => {});
     this.exporter = new TransportSpanExporter(transport);
     if (this.scheduledDelayMillis > 0) {
       this.timer = setInterval(() => { this.flush().catch((err) => this.logError("BatchSpanProcessor timer flush failed", err)); }, this.scheduledDelayMillis);
@@ -80,10 +85,29 @@ class BatchSpanProcessor {
   async onEnd(span: ReadableSpan): Promise<void> {
     this.queue.push(span);
     if (this.queue.length >= this.maxQueueSize) {
-      // Flush immediately without awaiting to prevent blocking
-      // but still allow the queue to be drained
-      this.flush().catch((err) => this.logError("BatchSpanProcessor flush failed", err));
+      this.scheduleFlush("BatchSpanProcessor flush failed");
     }
+  }
+
+  /**
+   * Request a flush without awaiting it.
+   *
+   * Coalesced on purpose: without this guard, a full queue enqueues one flush
+   * per emit, and every one of them chains onto flushPromise. Against a
+   * backend that is down, that serial chain grows without bound and starves
+   * every later flush. At most one flush is in flight at a time, with at most
+   * one follow-up queued behind it.
+   */
+  private scheduleFlush(reason: string): void {
+    if (this.flushScheduled) return;
+    this.flushScheduled = true;
+    this.flush()
+      .catch((err) => this.logError(reason, err))
+      .finally(() => {
+        this.flushScheduled = false;
+        // Records may have arrived while this flush was in flight.
+        if (this.queue.length >= this.maxQueueSize) this.scheduleFlush(reason);
+      });
   }
 
   async flush(): Promise<void> {
@@ -100,27 +124,27 @@ class BatchSpanProcessor {
       } catch (err) {
         // Put failed batch back at the front of the queue
         this.queue.unshift(...batch);
-        
-        // Retry with exponential backoff
+        this.retryCount++;
+
+        // No in-band sleep here on purpose. Sleeping inside the flushPromise
+        // chain blocks every subsequent flush for the backoff duration, so a
+        // down backend would stall the whole pipeline instead of just failing
+        // one batch. The re-queued batch is retried on the next flush — the
+        // scheduled timer already supplies the spacing.
         if (this.retryCount < this.maxRetries) {
-          this.retryCount++;
-          const delay = Math.min(1000 * Math.pow(2, this.retryCount - 1), 10000);
-          this.logError(`Span export failed, retrying in ${delay}ms (attempt ${this.retryCount}/${this.maxRetries})`, err);
-          
-          await new Promise(resolve => setTimeout(resolve, delay));
-          // Don't auto-retry here - let the next flush() call handle it
-          // This prevents infinite loops and allows proper batching
+          this.logError(`Span export failed, batch re-queued for retry (attempt ${this.retryCount}/${this.maxRetries})`, err);
         } else {
-          this.logError(`Span export failed after ${this.maxRetries} retries, ${batch.length} spans returned to queue`, err);
-          // Reset retry count so future batches can retry
+          this.logError(`Span export failed after ${this.retryCount} attempts, ${batch.length} spans returned to queue`, err);
+          // Reset so a recovered backend gets a fresh retry budget.
           this.retryCount = 0;
         }
-        
+
         // If queue exceeds max size, drop oldest items (from the end)
         if (this.queue.length > this.maxQueueSize) {
           const dropped = this.queue.length - this.maxQueueSize;
           this.queue = this.queue.slice(0, this.maxQueueSize);
           this.logError(`Dropped ${dropped} spans due to buffer overflow`, err);
+          this.onDrop(dropped);
         }
       }
     });
@@ -152,7 +176,7 @@ class SimpleLogProcessor {
     await promise;
   }
   async forceFlush(): Promise<void> { 
-    await Promise.all(this.inFlight);
+    await Promise.allSettled(this.inFlight);
     await this.exporter.forceFlush(); 
   }
   async shutdown(): Promise<void> { await this.exporter.shutdown(); }
@@ -163,14 +187,17 @@ class BatchLogProcessor {
   private timer?: ReturnType<typeof setInterval>;
   private readonly maxQueueSize: number;
   private readonly scheduledDelayMillis: number;
+  private readonly onDrop: (droppedCount: number) => void;
+  private flushScheduled = false;
   private exporter: TransportLogExporter;
   private retryCount: number = 0;
   private readonly maxRetries: number = 3;
   private flushPromise: Promise<void> = Promise.resolve();
 
-  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number; debug?: boolean }) {
+  constructor(transport: Transport, opts: { maxQueueSize: number; scheduledDelayMillis: number; debug?: boolean; onDrop?: (n: number) => void }) {
     this.maxQueueSize = opts.maxQueueSize;
     this.scheduledDelayMillis = opts.scheduledDelayMillis;
+    this.onDrop = opts.onDrop ?? (() => {});
     this.exporter = new TransportLogExporter(transport);
     if (this.scheduledDelayMillis > 0) {
       this.timer = setInterval(() => { this.flush().catch((err) => this.logError("BatchLogProcessor timer flush failed", err)); }, this.scheduledDelayMillis);
@@ -188,10 +215,20 @@ class BatchLogProcessor {
   async onEmit(log: ReadableLogRecord): Promise<void> {
     this.queue.push(log);
     if (this.queue.length >= this.maxQueueSize) {
-      // Flush immediately without awaiting to prevent blocking
-      // but still allow the queue to be drained
-      this.flush().catch((err) => this.logError("BatchLogProcessor flush failed", err));
+      this.scheduleFlush("BatchLogProcessor flush failed");
     }
+  }
+
+  /** See BatchSpanProcessor.scheduleFlush() for why this is coalesced. */
+  private scheduleFlush(reason: string): void {
+    if (this.flushScheduled) return;
+    this.flushScheduled = true;
+    this.flush()
+      .catch((err) => this.logError(reason, err))
+      .finally(() => {
+        this.flushScheduled = false;
+        if (this.queue.length >= this.maxQueueSize) this.scheduleFlush(reason);
+      });
   }
 
   async flush(): Promise<void> {
@@ -208,27 +245,23 @@ class BatchLogProcessor {
       } catch (err) {
         // Put failed batch back at the front of the queue
         this.queue.unshift(...batch);
-        
-        // Retry with exponential backoff
+        this.retryCount++;
+
+        // See BatchSpanProcessor.flush(): no in-band sleep, so a down backend
+        // can't stall the flushPromise chain for every other batch.
         if (this.retryCount < this.maxRetries) {
-          this.retryCount++;
-          const delay = Math.min(1000 * Math.pow(2, this.retryCount - 1), 10000);
-          this.logError(`Log export failed, retrying in ${delay}ms (attempt ${this.retryCount}/${this.maxRetries})`, err);
-          
-          await new Promise(resolve => setTimeout(resolve, delay));
-          // Don't auto-retry here - let the next flush() call handle it
-          // This prevents infinite loops and allows proper batching
+          this.logError(`Log export failed, batch re-queued for retry (attempt ${this.retryCount}/${this.maxRetries})`, err);
         } else {
-          this.logError(`Log export failed after ${this.maxRetries} retries, ${batch.length} logs returned to queue`, err);
-          // Reset retry count so future batches can retry
+          this.logError(`Log export failed after ${this.retryCount} attempts, ${batch.length} logs returned to queue`, err);
           this.retryCount = 0;
         }
-        
+
         // If queue exceeds max size, drop oldest items (from the end)
         if (this.queue.length > this.maxQueueSize) {
           const dropped = this.queue.length - this.maxQueueSize;
           this.queue = this.queue.slice(0, this.maxQueueSize);
           this.logError(`Dropped ${dropped} logs due to buffer overflow`, err);
+          this.onDrop(dropped);
         }
       }
     });
@@ -319,10 +352,12 @@ export function initProviders(opts: ProviderOptions): {
     spanProcessors.push(new BatchSpanProcessor(transport, {
       maxQueueSize,
       scheduledDelayMillis,
+      onDrop: opts.onDrop,
     }));
     logProcessors.push(new BatchLogProcessor(transport, {
       maxQueueSize,
       scheduledDelayMillis,
+      onDrop: opts.onDrop,
     }));
   }
 
@@ -342,25 +377,36 @@ export function initProviders(opts: ProviderOptions): {
   const tracerProvider = new SimpleTracerProvider(opts.resource, onSpanEnd);
   const loggerProvider = new FlareLogLoggerProvider(opts.resource, scope, logProcessors);
 
+  // Transports reject on export failure so the batch processors can re-queue.
+  // Flush and shutdown must therefore settle everything rather than bail on the
+  // first rejection — one unreachable backend must not abandon the others.
+  const settleAll = async (label: string, tasks: Array<Promise<unknown>>): Promise<void> => {
+    const results = await Promise.allSettled(tasks);
+    for (const r of results) {
+      if (r.status === "rejected") {
+        runWithHookSkipped(() => {
+          // eslint-disable-next-line no-console
+          console.error(`[FlareLog] ${label} failed:`, r.reason);
+        });
+      }
+    }
+  };
+
   const flush = async () => {
-    await Promise.all([
+    await settleAll("Processor flush", [
       ...spanProcessors.map((p) => p.forceFlush()),
       ...logProcessors.map((p) => p.forceFlush()),
     ]);
-    for (const transport of opts.transports) {
-      await transport.flush();
-    }
+    await settleAll("Transport flush", opts.transports.map((t) => t.flush()));
   };
 
   const shutdown = async () => {
     await flush();
-    await Promise.all([
+    await settleAll("Processor shutdown", [
       ...spanProcessors.map((p) => p.shutdown()),
       ...logProcessors.map((p) => p.shutdown()),
     ]);
-    for (const transport of opts.transports) {
-      await transport.shutdown();
-    }
+    await settleAll("Transport shutdown", opts.transports.map((t) => t.shutdown()));
   };
 
   return { tracerProvider, loggerProvider, flush, shutdown };

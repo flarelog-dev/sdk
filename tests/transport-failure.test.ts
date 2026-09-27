@@ -139,8 +139,8 @@ describe("Transport failure handling — CRITICAL: SDK must expose transport fai
   // SECTION 2: OTLPTransport retry and failure handling
   // =========================================================================
 
-  describe("OTLPTransport retry behavior — FIXED: retries added, but errors still swallowed", () => {
-    it("OTLPTransport retries then silently resolves (design: don't crash app)", async () => {
+  describe("OTLPTransport retry behavior — retries added, failures reported to the processor", () => {
+    it("OTLPTransport retries then rejects so the processor can re-queue", async () => {
       let callCount = 0;
       const fetchFn = async () => {
         callCount++;
@@ -155,12 +155,12 @@ describe("Transport failure handling — CRITICAL: SDK must expose transport fai
 
       const logs = [{ body: "test", severityNumber: 9, severityText: "INFO", attributes: {}, spanContext: undefined, hrTime: [0, 0], hrTimeObserved: [0, 0], instrumentationScope: { name: "test" }, resource: { attributes: {} } }];
 
-      // DESIGN CHOICE: exportLogs resolves silently after retries are exhausted.
-      // The SDK intentionally does NOT throw — transport errors shouldn't crash the app.
-      await transport.exportLogs(logs as never); // Does NOT throw
+      // The transport rejects once retries are exhausted. This does NOT reach
+      // the application: the batch processor catches it and re-queues the
+      // batch, which is what stops logs from being silently lost.
+      await expect(transport.exportLogs(logs as never)).rejects.toThrow("Connection timeout");
 
-      // fetch called 2 times per endpoint (logs), but traces may also be queued
-      // Just verify retries happened (at least 2 calls)
+      // Initial attempt + 1 retry, per endpoint.
       expect(callCount).toBeGreaterThanOrEqual(2);
     });
 
@@ -226,14 +226,14 @@ describe("Transport failure handling — CRITICAL: SDK must expose transport fai
 
       const logs = [{ body: "test", severityNumber: 9, severityText: "INFO", attributes: {}, spanContext: undefined, hrTime: [0, 0], hrTimeObserved: [0, 0], instrumentationScope: { name: "test" }, resource: { attributes: {} } }];
 
-      // Silently resolves (design choice: don't crash)
-      await transport.exportLogs(logs as never);
+      // Gives up after exhausting retries, and reports the final failure.
+      await expect(transport.exportLogs(logs as never)).rejects.toThrow("fail 3");
 
       // 3 attempts (initial + 2 retries)
       expect(attempt).toBe(3);
     });
 
-    it("OTLPTransport retries on HTTP 5xx errors then silently resolves", async () => {
+    it("OTLPTransport retries on HTTP 5xx errors then rejects", async () => {
       let callCount = 0;
       globalThis.fetch = async () => {
         callCount++;
@@ -247,8 +247,8 @@ describe("Transport failure handling — CRITICAL: SDK must expose transport fai
 
       const logs = [{ body: "test", severityNumber: 9, severityText: "INFO", attributes: {}, spanContext: undefined, hrTime: [0, 0], hrTimeObserved: [0, 0], instrumentationScope: { name: "test" }, resource: { attributes: {} } }];
 
-      // Silently resolves (design choice)
-      await transport.exportLogs(logs as never);
+      // 5xx is retried, then the final failure is reported to the processor.
+      await expect(transport.exportLogs(logs as never)).rejects.toThrow("HTTP 503");
       expect(callCount).toBe(3);
     });
 
@@ -618,12 +618,14 @@ describe("Transport failure handling — CRITICAL: SDK must expose transport fai
   // SECTION 9: Log loss detection — PARTIALLY FIXED
   // =========================================================================
 
-  describe("Log loss detection — PARTIALLY FIXED via batch queue recovery", () => {
-    it("FIXED: batch mode returns failed items to queue for retry", async () => {
+  describe("Log loss detection — batch queue recovery", () => {
+    it("re-queues a failed batch and the log is ACTUALLY delivered on a later attempt", async () => {
       let attempt = 0;
-      globalThis.fetch = vi.fn().mockImplementation(async () => {
+      const delivered: string[] = [];
+      globalThis.fetch = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
         attempt++;
         if (attempt <= 2) throw new Error("Temporary");
+        delivered.push(String(init?.body ?? ""));
         return { ok: true, status: 200, text: async () => "", json: async () => ({}) };
       });
 
@@ -636,12 +638,68 @@ describe("Transport failure handling — CRITICAL: SDK must expose transport fai
       });
 
       logger.info("critical business event");
-      await logger.flush(); // May fail
-      await wait(150); // Wait for timer retry
+      await logger.flush(); // transport rejects here; processor re-queues
+      await wait(150); // timer retries the re-queued batch
 
-      // FIXED: Failed items are returned to queue and retried.
-      // The log is eventually delivered.
-      expect(attempt).toBeGreaterThan(1);
+      // The point of the re-queue: the log must reach the backend, not just be
+      // attempted more than once. Asserting on callCount alone would also pass
+      // when the transport's own in-line retry was the only thing running.
+      expect(attempt).toBeGreaterThan(2);
+      expect(delivered.length).toBeGreaterThan(0);
+      expect(delivered.join("\n")).toContain("critical business event");
+
+      logger.destroy();
+    });
+
+    it("survives a permanently dead backend without rejecting to the caller", async () => {
+      globalThis.fetch = vi.fn().mockImplementation(async () => {
+        throw new Error("backend down");
+      });
+
+      const logger = new FlareLog({
+        workerMode: false,
+        apiKey: "fl_test_key",
+        flushIntervalMs: 20,
+        maxBatchSize: 100,
+      });
+
+      logger.info("log against a dead backend");
+
+      // The retry path must stay entirely internal: flush() resolves rather
+      // than surfacing transport failures to the host application.
+      await expect(logger.flush()).resolves.toBeUndefined();
+      await wait(60);
+      await expect(logger.flush()).resolves.toBeUndefined();
+
+      logger.destroy();
+    });
+
+    it("onDrop fires when the queue overflows after repeated failures", async () => {
+      globalThis.fetch = vi.fn().mockImplementation(async () => {
+        throw new Error("backend down");
+      });
+
+      const dropped: number[] = [];
+      const logger = new FlareLog({
+        workerMode: false,
+        apiKey: "fl_test_key",
+        flushIntervalMs: 20,
+        maxBatchSize: 10,
+        onDrop: (n) => dropped.push(n),
+      });
+
+      // Log faster than the failing export can drain the queue, so records
+      // pile up behind an in-flight batch. Each failure re-queues its batch at
+      // the front, pushing the queue past maxBatchSize — the oldest records are
+      // then dropped, and that must be reported rather than happening silently.
+      for (let i = 0; i < 40; i++) logger.info(`log ${i}`);
+
+      await logger.flush();
+      await wait(80);
+      await logger.flush();
+
+      expect(dropped.length).toBeGreaterThan(0);
+      expect(dropped.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
 
       logger.destroy();
     });

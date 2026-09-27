@@ -239,6 +239,7 @@ export class FlareLog {
       workerMode: isWorker,
       maxQueueSize: Math.max(1, config.maxBatchSize ?? 100),
       scheduledDelayMillis: config.flushIntervalMs ?? (isWorker ? 0 : 5000),
+      onDrop: (dropped) => config.onDrop?.(dropped),
     });
     this.flushFn = flush;
     this.shutdownFn = shutdown;

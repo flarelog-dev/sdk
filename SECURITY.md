@@ -11,7 +11,7 @@ The FlareLog team takes security bugs seriously. We appreciate your efforts to r
 Instead, please report security issues privately using **one** of the following channels, in order of preference:
 
 1. **GitHub Security Advisories** (preferred): Go to <https://github.com/flarelog-dev/sdk/security/advisories/new> and submit a private vulnerability report.
-2. **Email:** Send a PGP-encrypted email to <security@flarelog.dev>. (Public key fingerprint: see `SECURITY.md` history on the `main` branch — we will publish a key here in a future release.)
+2. **Email:** Send an email to <security@flarelog.dev>. Please do not send sensitive proof-of-concept material over plain email; ask for a secure channel if your report includes exploit details.
 
 Please include the following in your report so we can triage quickly:
 
@@ -39,12 +39,14 @@ If you do not receive a response within 48 hours, please follow up by emailing <
 The following components of the `flarelog-dev/sdk` repository are in scope:
 
 - `src/` — all source code shipped in the published package
-- `src/frameworks/` — framework adapter entry points (`express`, `hono`, `next`, `react`, `tanstack-start`, `cf-workers`)
-- `src/client.ts`, `src/batch.ts` — the log ingestion pipeline and HTTP transport
+- `src/frameworks/` — framework adapter entry points (`express`, `hono`, `next`, `react`, `tanstack-start`, `cf-workers`, `vercel`, `cf-pages`)
+- `src/otel/` — the log ingestion pipeline, batch processors, and HTTP transports
+- `src/ai/` — AI inference instrumentation, including the `fetch` interceptor, provider matchers, SSE parsing, and sample capture
 - `src/dedup.ts`, `src/errors.ts`, `src/console.ts` — instrumentation hooks
 - The `exports` map in `package.json` and the resulting published artifacts in `dist/`
 - Default PII scrubbing behavior in `src/client.ts` (`scrubFields`, `beforeSend`)
-- The default HTTPS enforcement for the ingestion endpoint
+- Sample capture in `src/ai/` (`captureSamples`, `maxPromptSampleChars`)
+- HTTPS enforcement on the ingestion endpoint. Note that this is enforced by `FlarelogTransport`; `OTLPTransport` does **not** enforce HTTPS, so a plaintext `http://` OTLP endpoint configured by the user will send its configured headers unencrypted.
 
 ### Out of scope
 
@@ -67,7 +69,8 @@ We provide security fixes for the following versions of `@flarelog/sdk`:
 
 | Version | Supported          | Notes                          |
 | ------- | ------------------ | ------------------------------ |
-| 1.x     | :white_check_mark: | Current stable line            |
+| 2.x     | :white_check_mark: | Current stable line            |
+| 1.x     | :x:                | End of life; upgrade required  |
 | < 1.0   | :x:                | Pre-release; upgrade required  |
 
 Only the latest minor release of the current major line receives active security patches. When a new minor is released, the previous minor enters a 30-day grace period during which critical fixes may be backported at our discretion.
@@ -78,9 +81,10 @@ When deploying FlareLog, review the following configuration knobs. Misconfigurat
 
 - **`apiKey`** — Required. Treat as a secret. Never commit to version control; load from your environment (`process.env.FLARELOG_API_KEY`, `wrangler.toml` secrets, Vercel project env vars, etc.).
 - **`allowInsecure: true`** — Disables HTTPS enforcement on the ingestion endpoint. Only use for local development against `http://localhost`. Never enable in production.
-- **`scrubFields`** — Default list redacts common credential-bearing keys (`password`, `secret`, `token`, `apiKey`, `authorization`, `cookie`, `session`, `credit_card`, `ssn`). **Emails, phone numbers, and free-form names are NOT scrubbed by default.** Extend the list or supply a custom `beforeSend` hook for stricter PII redaction.
+- **`scrubFields`** — Default list redacts common credential-bearing keys (`password`, `secret`, `token`, `apiKey`, `api_key`, `authorization`, `auth`, `cookie`, `session`, `credit_card`, `creditCard`, `ssn`). Matching is **substring-based**, so `token` also matches `refreshToken`, `tokenCount`, and similar. **Emails, phone numbers, and free-form names are NOT scrubbed by default.** Extend the list or supply a custom `beforeSend` hook for stricter PII redaction.
+- **`ai.captureSamples`** — Defaults to `false`. When enabled, up to `maxPromptSampleChars` (default 500) of prompt and completion content is attached to spans as `flarelog.ai.prompt_sample` / `flarelog.ai.completion_sample`. These span attributes are **not** passed through `scrubFields`, so enabling this can ship model output containing PII to your backend.
 - **`beforeSend`** — Synchronous hook invoked before each log is queued. Return `false` to drop the log entirely, or mutate the payload to remove sensitive data.
 
 ## Acknowledgments
 
-We are grateful to the security researchers and community members who help keep FlareLog safe. Contributors to security fixes will be credited in the relevant GitHub Security Advisory and in the `CHANGELOG.md` entry for the fixed release, unless they prefer to remain anonymous.
+We are grateful to the security researchers and community members who help keep FlareLog safe. Contributors to security fixes will be credited in the relevant GitHub Security Advisory and in the GitHub Release notes for the fixed release, unless they prefer to remain anonymous.

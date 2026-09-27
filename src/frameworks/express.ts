@@ -108,6 +108,6 @@ export function expressErrorHandler(_logger: FlareLog) {
     });
 
     res.statusCode = 500;
-    (res as any).json({ error: "Internal server error" });
+    (res as unknown as { json: (body: unknown) => void }).json({ error: "Internal server error" });
   };
 }

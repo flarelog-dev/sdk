@@ -167,14 +167,22 @@ export function instrumentFetch(
         method = (init?.method ?? input.method) ?? "GET";
       } else {
         urlStr = String(input);
-        method = (init?.method ?? "GET") ?? "GET";
+        method = init?.method ?? "GET";
       }
     } catch {
       return passthroughFetch(input, init);
     }
 
-    if (config.shouldInstrument && !config.shouldInstrument(urlStr, method)) {
-      return passthroughFetch(input, init);
+    // A user-supplied filter that throws must never take down the caller's
+    // request. Fail open to "not instrumented" and let the request through.
+    if (config.shouldInstrument) {
+      let shouldInstrument = false;
+      try {
+        shouldInstrument = config.shouldInstrument(urlStr, method);
+      } catch {
+        shouldInstrument = false;
+      }
+      if (!shouldInstrument) return passthroughFetch(input, init);
     }
 
     const matcher = findMatcher(urlStr, method, config.extraProviderHosts);
@@ -546,7 +554,12 @@ async function instrumentedCall(
 
     let completionSample: string | undefined;
     try {
-      await processJsonResponse(response, matcher, record, effectiveConfig.maxPromptSampleChars, (cs) => {
+      // Mirror the prompt-side gate: `captureSamples` must gate the completion
+      // too. Passing 0 disables extraction, which is what `processJsonResponse`
+      // treats as "do not sample" — otherwise raw model output would ship even
+      // with captureSamples off.
+      const sampleChars = effectiveConfig.captureSamples ? effectiveConfig.maxPromptSampleChars : 0;
+      await processJsonResponse(response, matcher, record, sampleChars, (cs) => {
         completionSample = cs;
       });
     } catch {

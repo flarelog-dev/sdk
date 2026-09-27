@@ -5,6 +5,14 @@ function hrTimeToNanos(hrTime: HrTime): string {
   return (BigInt(seconds) * 1_000_000_000n + BigInt(nanos)).toString();
 }
 
+/**
+ * OTLP represents an empty value as a bare `{}` (this is how null is encoded).
+ * Modelled as `Record<string, never>` rather than `{}` on purpose: a literal
+ * `{}` in a union absorbs every other member, which silently disables all type
+ * checking on serialized values.
+ */
+type EmptyAnyValue = Record<string, never>;
+
 type AnyValue =
   | { stringValue: string }
   | { intValue: number }
@@ -12,7 +20,7 @@ type AnyValue =
   | { boolValue: boolean }
   | { arrayValue: { values: AnyValue[] } }
   | { kvlistValue: { values: Array<{ key: string; value: AnyValue }> } }
-  | {};
+  | EmptyAnyValue;
 
 function toAnyValue(value: unknown): AnyValue {
   if (value === null || value === undefined) return {};

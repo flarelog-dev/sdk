@@ -101,13 +101,15 @@ export class OTLPTransport implements Transport {
         }
       }
     }
-    // Don't throw — transport errors shouldn't crash the app.
-    // Log to console so the developer knows their backend is unreachable.
+    // Report the failure to the caller so the processor can re-queue the
+    // batch instead of dropping it. Throwing here does NOT reach the
+    // application: every flush() call site is .catch()-guarded, so the
+    // "never crash the host app" contract still holds.
     runWithHookSkipped(() => {
       // eslint-disable-next-line no-console
       console.error(`[FlareLog] OTLP export to ${url} failed after ${this.maxRetries + 1} attempts:`, lastErr);
     });
-    // Silently return to prevent breaking the processor chain
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
 
   private async send(url: string, body: unknown): Promise<void> {

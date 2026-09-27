@@ -32,7 +32,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
   test:
     name: Test
@@ -57,6 +56,32 @@ jobs:
         run: npm test
       - name: Run smoke testing
         run: npm run test:smoke
+
+  contract-tests:
+    name: Contract tests (real framework packages)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The TanStack Start and Hono suites mock these packages with hand-rolled
+      # stubs. Without this job, a real package dropping an API leaves 200+
+      # unit tests green while production breaks — which is how a broken build
+      # reaches a publish.
+      - name: Install real framework packages
+        run: npm install --no-save --legacy-peer-deps @tanstack/react-start@latest hono@latest
+
+      - name: Run contract tests
+        run: npm run test:contract
 
       - name: Upload coverage
         if: matrix.node-version == 22

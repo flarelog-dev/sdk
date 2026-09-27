@@ -11,7 +11,23 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { flarelog } from "../../src/factory";
-import { flarelogAI, uninstrumentFetch, __setPassthroughFetch, __resetInterceptorState } from "../../src/ai";
+import { flarelogAI, uninstrumentFetch } from "../../src/ai";
+import { __setPassthroughFetch, __resetInterceptorState } from "../../src/ai/fetch-interceptor";
+import { Span } from "../../src/otel/span";
+
+/**
+ * Capture every attribute written to every span for the duration of a test.
+ * Sample capture and the gen_ai.* semconv layer are span attributes, so
+ * asserting on the log record alone cannot see them.
+ */
+function captureSpanAttributes(): Record<string, unknown> {
+  const attrs: Record<string, unknown> = {};
+  vi.spyOn(Span.prototype, "setAttribute").mockImplementation(function (this: Span, key: string, value: unknown) {
+    attrs[key] = value;
+    return this;
+  });
+  return attrs;
+}
 
 describe("flarelogAI end-to-end", () => {
   let loggedEntries: Array<{ level: string; message: string; metadata: Record<string, unknown> }>;
@@ -365,6 +381,98 @@ describe("flarelogAI end-to-end", () => {
       body: JSON.stringify({ model: "gpt-4o", messages: [] }),
     });
     expect(loggedEntries.filter((e) => e.metadata["flarelog.kind"] === "ai_call")).toHaveLength(0);
+  });
+
+  it("a throwing shouldInstrument filter does not break the caller's request", async () => {
+    const mockResponse = new Response(
+      JSON.stringify({
+        model: "gpt-4o",
+        choices: [{ message: { content: "Hi" } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+    const fetchSpy = vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch;
+    __setPassthroughFetch(fetchSpy);
+
+    const logger = flarelog({ warnOnConsoleFallback: false });
+    logger.info = (message: string, metadata?: Record<string, unknown>) => {
+      loggedEntries.push({ level: "info", message, metadata: metadata ?? {} });
+    };
+    flarelogAI(logger, {
+      shouldInstrument: () => {
+        throw new Error("filter exploded");
+      },
+    });
+
+    // The SDK's contract is that instrumentation never breaks the host app, so
+    // a user filter that throws must fail open, not propagate.
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-4o", messages: [] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalled();
+    expect(loggedEntries.filter((e) => e.metadata["flarelog.kind"] === "ai_call")).toHaveLength(0);
+  });
+
+  it("captureSamples: false ships neither prompt nor completion content", async () => {
+    const mockResponse = new Response(
+      JSON.stringify({
+        model: "gpt-4o",
+        choices: [{ message: { content: "SECRET-COMPLETION-PII" } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+    __setPassthroughFetch(vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch);
+
+    const spanAttrs = captureSpanAttributes();
+    const logger = flarelog({ warnOnConsoleFallback: false });
+    logger.info = (message: string, metadata?: Record<string, unknown>) => {
+      loggedEntries.push({ level: "info", message, metadata: metadata ?? {} });
+    };
+    flarelogAI(logger, { captureSamples: false });
+
+    await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: "SECRET-PROMPT-PII" }] }),
+    });
+
+    // Both sides must be gated. The completion side used to leak even with
+    // captureSamples off, because only the prompt was checked.
+    expect(spanAttrs["flarelog.ai.prompt_sample"]).toBeUndefined();
+    expect(spanAttrs["flarelog.ai.completion_sample"]).toBeUndefined();
+    expect(JSON.stringify(spanAttrs)).not.toContain("SECRET-COMPLETION-PII");
+    expect(JSON.stringify(spanAttrs)).not.toContain("SECRET-PROMPT-PII");
+  });
+
+  it("captureSamples: true captures the completion", async () => {
+    const mockResponse = new Response(
+      JSON.stringify({
+        model: "gpt-4o",
+        choices: [{ message: { content: "the completion body" } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+    __setPassthroughFetch(vi.fn().mockResolvedValue(mockResponse) as unknown as typeof fetch);
+
+    const spanAttrs = captureSpanAttributes();
+    const logger = flarelog({ warnOnConsoleFallback: false });
+    logger.info = (message: string, metadata?: Record<string, unknown>) => {
+      loggedEntries.push({ level: "info", message, metadata: metadata ?? {} });
+    };
+    flarelogAI(logger, { captureSamples: true });
+
+    await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: "the prompt body" }] }),
+    });
+
+    expect(spanAttrs["flarelog.ai.prompt_sample"]).toBe("the prompt body");
+    expect(spanAttrs["flarelog.ai.completion_sample"]).toBe("the completion body");
   });
 
   it("recognizes custom OpenAI-compatible hosts", async () => {
