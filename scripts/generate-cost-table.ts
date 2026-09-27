@@ -101,6 +101,26 @@ const HARDCODED_HOSTS: Record<string, string> = {
   vercel: "api.vercel.com",
 };
 
+/**
+ * Models their vendor has retired from the catalog, but that are still called
+ * in the wild. The catalog only prices a model under a provider that still
+ * sells it, so retired ids (e.g. `claude-opus-4`) vanish from PRICE_TABLE on
+ * regeneration and silently fall through to PROVIDER_FALLBACK — billing Claude
+ * Opus 4 at Sonnet rates, a 5x undercount.
+ *
+ * Rates are USD per 1M tokens. Where the catalog still prices the id under a
+ * gateway provider, that price is used; otherwise the rates come from the
+ * vendor's public pricing page. Applied as fill-gaps-only, so these entries go
+ * inert once a model is re-listed with first-party pricing.
+ */
+const LEGACY_MODELS: Record<string, NonNullable<CatalogModel["cost"]>> = {
+  "anthropic/claude-opus-4": { input: 15, output: 75, cache_read: 1.5, cache_write: 18.75 },
+  "anthropic/claude-opus-4-20250514": { input: 15, output: 75, cache_read: 1.5, cache_write: 18.75 },
+  "claude-opus-4-20250514": { input: 15, output: 75, cache_read: 1.5, cache_write: 18.75 },
+  "anthropic/claude-3-haiku": { input: 0.25, output: 1.25, cache_read: 0.03, cache_write: 0.3 },
+  "claude-3-haiku": { input: 0.25, output: 1.25, cache_read: 0.03, cache_write: 0.3 },
+};
+
 async function fetchCatalog(): Promise<Catalog> {
   const res = await fetch(CATALOG_URL, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`Failed to fetch catalog: HTTP ${res.status}`);
@@ -156,6 +176,13 @@ async function main() {
         {};
       table.set(key, { ...canonical, cost: modelDef.cost });
     }
+  }
+
+  // Retired models: fill gaps only, never override live catalog pricing.
+  for (const [modelId, cost] of Object.entries(LEGACY_MODELS)) {
+    const key = modelId.toLowerCase().trim();
+    if (!key || table.has(key)) continue;
+    table.set(key, { cost });
   }
 
   const keys = [...table.keys()].sort((a, b) => a.localeCompare(b));

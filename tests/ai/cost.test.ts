@@ -268,3 +268,29 @@ it("has entries for major Anthropic models", () => {
     expect(opus.cacheCreationInput).toBeGreaterThan(opus.input);
   });
 });
+
+describe("LEGACY_MODELS retention", () => {
+  it("keeps retired first-party models in PRICE_TABLE", () => {
+    expect(PRICE_TABLE["anthropic/claude-opus-4"]).toBeDefined();
+    expect(PRICE_TABLE["anthropic/claude-opus-4-20250514"]).toBeDefined();
+    expect(PRICE_TABLE["claude-opus-4-20250514"]).toBeDefined();
+    expect(PRICE_TABLE["anthropic/claude-3-haiku"]).toBeDefined();
+    expect(PRICE_TABLE["claude-3-haiku"]).toBeDefined();
+  });
+
+  it("resolves retired models to their real price, not the provider fallback", () => {
+    // The catalog dropped `claude-opus-4` from the anthropic provider, so
+    // without a legacy entry it falls through to PROVIDER_FALLBACK.anthropic
+    // (3/15) and under-bills Opus 4 by 5x.
+    const opus = lookupPrice("anthropic/claude-opus-4", "anthropic");
+    expect(opus.input).toBe(15);
+    expect(opus.output).toBe(75);
+  });
+
+  it("does not let legacy entries override live catalog pricing", () => {
+    // `claude-opus-4.1` is still sold first-party and priced by the catalog.
+    // The legacy fill-gaps-only merge must leave the catalog rate untouched.
+    expect(PRICE_TABLE["anthropic/claude-opus-4.1"].input).toBe(15);
+    expect(PRICE_TABLE["anthropic/claude-opus-4.5"].input).toBe(5);
+  });
+});
