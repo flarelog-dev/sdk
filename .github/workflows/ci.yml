@@ -73,12 +73,45 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The TanStack Start and Hono suites mock these packages with hand-rolled
-      # stubs. Without this job, a real package dropping an API leaves 200+
-      # unit tests green while production breaks — which is how a broken build
-      # reaches a publish.
+      # The TanStack Start, Hono, Next and Express suites mock these packages
+      # with hand-rolled stubs. Without this job, a real package dropping an
+      # API leaves 200+ unit tests green while production breaks — which is how
+      # a broken build reaches a publish.
+      #
+      # --save-dev rather than --no-save: with --no-save, npm reconciles the
+      # tree against package.json and prunes these straight back out, so they
+      # never actually land. This job's checkout is throwaway, so recording
+      # them as devDeps here is harmless — it is not committed.
+      #
+      # --legacy-peer-deps because these are optional peers that disagree with
+      # the repo's React 18. --ignore-scripts because next's SWC postinstall is
+      # a large native download the contract test does not need (it only
+      # imports the package entry).
       - name: Install real framework packages
-        run: npm install --no-save --legacy-peer-deps @tanstack/react-start@latest hono@latest
+        run: npm install --save-dev --legacy-peer-deps --ignore-scripts @tanstack/react-start@latest hono@latest express@latest next@latest
+
+      # The contract tests skip when a package is absent, so a silently-failed
+      # install would turn this whole job into a green no-op. Assert every
+      # package actually resolves before trusting the result.
+      - name: Verify framework packages resolve
+        run: |
+          node --input-type=module -e "
+          const pkgs = ['@tanstack/react-start', 'hono', 'express', 'next'];
+          const missing = [];
+          for (const p of pkgs) {
+            try {
+              await import(p);
+              console.log('resolved:', p);
+            } catch (e) {
+              missing.push(p);
+              console.error('NOT RESOLVABLE:', p, e.code || e.message);
+            }
+          }
+          if (missing.length) {
+            console.error('Missing framework packages:', missing.join(', '));
+            process.exit(1);
+          }
+          "
 
       - name: Run contract tests
         run: npm run test:contract

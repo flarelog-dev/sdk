@@ -26,6 +26,32 @@ const RUN_CONTRACT = process.env.FLARELOG_RUN_CONTRACT_TESTS === "1";
 
 const skip = RUN_CONTRACT ? describe : describe.skip;
 
+/**
+ * Load an optional peer package for contract verification.
+ *
+ * The distinction that matters here:
+ * - package NOT installed  -> skip, because there is nothing to verify against
+ * - package installed but the API changed -> fail, which is the real signal
+ *
+ * Hard-failing on a missing package would make this suite unusable locally
+ * (the framework packages are optional peers), and silently returning would let
+ * a broken CI install turn every contract test into a false pass — which is the
+ * exact failure this suite exists to prevent. CI installs the packages and
+ * asserts they resolve, so a missing package is caught there instead.
+ *
+ * `/* @vite-ignore *\/` is required: the specifier is dynamic, so Vite must
+ * leave it alone rather than trying to resolve it at transform time.
+ */
+type SkipContext = { skip: (note?: string) => never };
+
+async function loadPackage(ctx: SkipContext, spec: string): Promise<Record<string, unknown>> {
+  try {
+    return (await import(/* @vite-ignore */ spec)) as Record<string, unknown>;
+  } catch {
+    return ctx.skip(`${spec} is not installed`);
+  }
+}
+
 // ─── @tanstack/react-start contract ─────────────────────────────────────────
 //
 // The mock in tests/tanstack-start.test.ts provides:
@@ -36,26 +62,26 @@ const skip = RUN_CONTRACT ? describe : describe.skip;
 // test fails before that reaches a user.
 
 skip("@tanstack/react-start contract", () => {
-  it("exports createMiddleware (used by tanstackStartMiddleware)", async () => {
-    const mod = await import("@tanstack/react-start");
+  it("exports createMiddleware (used by tanstackStartMiddleware)", async (ctx) => {
+    const mod = await loadPackage(ctx, "@tanstack/react-start");
     expect(typeof mod.createMiddleware).toBe("function");
   });
 
-  it("exports createStart (used by createStart docs examples)", async () => {
-    const mod = await import("@tanstack/react-start");
+  it("exports createStart (used by createStart docs examples)", async (ctx) => {
+    const mod = await loadPackage(ctx, "@tanstack/react-start");
     expect(typeof mod.createStart).toBe("function");
   });
 
-  it("createMiddleware() returns a builder with .server() (the v1 contract)", async () => {
-    const mod = await import("@tanstack/react-start");
-    const builder = mod.createMiddleware();
-    expect(typeof builder.server).toBe("function");
+  it("createMiddleware() returns a builder with .server() (the v1 contract)", async (ctx) => {
+    const mod = await loadPackage(ctx, "@tanstack/react-start");
+    const createMiddleware = mod.createMiddleware as () => { server: unknown };
+    expect(typeof createMiddleware().server).toBe("function");
   });
 
-  it("createStart() accepts a getOptions callback returning { requestMiddleware }", async () => {
-    const mod = await import("@tanstack/react-start");
-    const start = mod.createStart(() => ({ requestMiddleware: [] }));
-    expect(start).toBeDefined();
+  it("createStart() accepts a getOptions callback returning { requestMiddleware }", async (ctx) => {
+    const mod = await loadPackage(ctx, "@tanstack/react-start");
+    const createStart = mod.createStart as (cb: () => unknown) => unknown;
+    expect(createStart(() => ({ requestMiddleware: [] }))).toBeDefined();
   });
 
   // ─── NEGATIVE contract: APIs the SDK must NOT rely on ────────────────────
@@ -63,13 +89,13 @@ skip("@tanstack/react-start contract", () => {
   // These are APIs that previous SDK versions used but were removed/never
   // existed in v1 stable. If a future PR re-introduces them, this test fails.
 
-  it("does NOT export getRequestEvent (removed before v1 stable — SDK must not use it)", async () => {
-    const mod = await import("@tanstack/react-start");
+  it("does NOT export getRequestEvent (removed before v1 stable — SDK must not use it)", async (ctx) => {
+    const mod = await loadPackage(ctx, "@tanstack/react-start");
     expect("getRequestEvent" in mod).toBe(false);
   });
 
-  it("does NOT export getEvent (common confusion with getRequestEvent)", async () => {
-    const mod = await import("@tanstack/react-start");
+  it("does NOT export getEvent (common confusion with getRequestEvent)", async (ctx) => {
+    const mod = await loadPackage(ctx, "@tanstack/react-start");
     expect("getEvent" in mod).toBe(false);
   });
 });
@@ -84,7 +110,7 @@ skip("@tanstack/react-start contract", () => {
 // isolate (e.g. via `wrangler dev` in CI).
 
 skip("cloudflare:workers contract", () => {
-  it("exports `env` (the Worker bindings object) on the Workers runtime", async () => {
+  it("exports `env` (the Worker bindings object) on the Workers runtime", async (ctx) => {
     // Use the same Function()-hidden import as production code, so the test
     // exercises the real resolution path.
     const dynamicImport = new Function(
@@ -97,10 +123,10 @@ skip("cloudflare:workers contract", () => {
       mod = await dynamicImport("cloudflare:workers");
     } catch (e) {
       // On Node/Vitest, `new Function("return import(spec)")` throws because
-      // there's no ESM dynamic-import callback. On Workers runtime it works.
-      // Skip in non-Worker environments.
-      console.log("cloudflare:workers not reachable in this environment —", (e as Error).message);
-      return;
+      // there's no ESM dynamic-import callback. On the Workers runtime it
+      // works. Report as skipped — returning here would report a PASS for a
+      // check that never ran, which is how gaps hide.
+      return ctx.skip(`cloudflare:workers not reachable here: ${(e as Error).message}`);
     }
 
     expect(mod).toBeDefined();
@@ -164,27 +190,38 @@ describe("SDK self-contract — exports map", () => {
 // package exports a `Hono` class whose context has the expected shape.
 
 skip("Hono contract", () => {
-  it("exports the Hono class", async () => {
-    const mod = await import("hono");
+  it("exports the Hono class", async (ctx) => {
+    const mod = await loadPackage(ctx, "hono");
     expect(typeof mod.Hono).toBe("function");
   });
 
-  it("Hono context has req.header(), req.method, req.path, res.status, set(), env", async () => {
-    const { Hono } = await import("hono");
+  it("Hono context has req.header(), req.method, req.path, res.status, set(), env", async (ctx) => {
+    const mod = await loadPackage(ctx, "hono");
+    const Hono = mod.Hono as new () => {
+      get: (path: string, handler: (c: unknown) => unknown) => unknown;
+      fetch: (req: Request) => Promise<unknown>;
+    };
     const app = new Hono();
 
     // Register a route that captures the context shape
     let captured: Record<string, unknown> = {};
     app.get("/test", (c) => {
-      captured = {
-        hasReqHeader: typeof c.req.header === "function",
-        hasReqMethod: "method" in c.req,
-        hasReqPath: "path" in c.req,
-        hasResStatus: "status" in c.res,
-        hasSet: typeof c.set === "function",
-        hasEnv: "env" in c,
+      const ctx = c as {
+        req: { header: unknown; method: string; path: string };
+        res: { status: number };
+        set: unknown;
+        env: unknown;
+        text: (s: string) => unknown;
       };
-      return c.text("ok");
+      captured = {
+        hasReqHeader: typeof ctx.req.header === "function",
+        hasReqMethod: "method" in ctx.req,
+        hasReqPath: "path" in ctx.req,
+        hasResStatus: "status" in ctx.res,
+        hasSet: typeof ctx.set === "function",
+        hasEnv: "env" in ctx,
+      };
+      return ctx.text("ok");
     });
 
     // Invoke the route with a fake request
@@ -209,10 +246,10 @@ skip("Hono contract", () => {
 // importable and exposes the expected types.
 
 skip("Next.js contract", () => {
-  it("the next package is importable", async () => {
+  it("the next package is importable", async (ctx) => {
     // `next` is a CLI package, not a library — but it should at least
     // resolve. If the import throws, the package isn't installed.
-    const mod = await import("next");
+    const mod = await loadPackage(ctx, "next");
     expect(mod).toBeDefined();
   });
 });
@@ -223,13 +260,14 @@ skip("Next.js contract", () => {
 // the real package exports the expected function signature anyway.
 
 skip("Express contract", () => {
-  it("exports a default function (the express app factory)", async () => {
-    const mod = await import("express");
+  it("exports a default function (the express app factory)", async (ctx) => {
+    const mod = await loadPackage(ctx, "express");
     expect(typeof mod.default).toBe("function");
   });
 
-  it("express() returns an app with .use(), .get(), .post()", async () => {
-    const express = (await import("express")).default;
+  it("express() returns an app with .use(), .get(), .post()", async (ctx) => {
+    const mod = await loadPackage(ctx, "express");
+    const express = mod.default as () => { use: unknown; get: unknown; post: unknown };
     const app = express();
     expect(typeof app.use).toBe("function");
     expect(typeof app.get).toBe("function");

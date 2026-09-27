@@ -142,7 +142,7 @@
     "build": "tsup",
     "test": "vitest run",
     "update-prices": "node --experimental-strip-types scripts/generate-cost-table.ts",
-    "test:contract": "FLARELOG_RUN_CONTRACT_TESTS=1 vitest run tests/contract.test.ts",
+    "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:smoke": "npm run build && node scripts/build-smoke.mjs",
     "lint": "eslint src/ tests/",
     "typecheck": "tsc --noEmit",
