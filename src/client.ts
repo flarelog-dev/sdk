@@ -169,6 +169,7 @@ export class FlareLog {
     batchSize: number;
     flushIntervalMs: number;
     debug: boolean;
+    logToStderr: boolean;
     defaultSource: string;
     includeTimestamps: boolean;
     autoCapture: NonNullable<FlareLogConfig["autoCapture"]>;
@@ -259,6 +260,7 @@ export class FlareLog {
       batchSize: config.batchSize ?? (isWorker ? 1 : 50),
       flushIntervalMs: config.flushIntervalMs ?? (isWorker ? 0 : 5000),
       debug: config.debug ?? false,
+      logToStderr: config.logToStderr ?? false,
       defaultSource: config.defaultSource ?? "",
       includeTimestamps: config.includeTimestamps ?? true,
       autoCapture: config.autoCapture ?? {},
@@ -333,7 +335,7 @@ export class FlareLog {
   ): Transport[] {
     // Explicit transports array wins.
     if (config.transports && config.transports.length > 0) {
-      return config.transports.map((t) => this.instantiateTransport(t, apiKey, flarelogEndpoint));
+      return config.transports.map((t) => this.instantiateTransport(t, apiKey, flarelogEndpoint, config.logToStderr));
     }
 
     const transports: Transport[] = [];
@@ -418,16 +420,21 @@ export class FlareLog {
           );
         });
       }
-      transports.push(new ConsoleTransport());
+      transports.push(new ConsoleTransport({ stderr: config.logToStderr }));
     }
 
     return transports;
   }
 
-  private instantiateTransport(t: TransportConfig, apiKey: string | undefined, flarelogEndpoint: string): Transport {
+  private instantiateTransport(
+    t: TransportConfig,
+    apiKey: string | undefined,
+    flarelogEndpoint: string,
+    logToStderr?: boolean
+  ): Transport {
     switch (t.type) {
       case "console":
-        return new ConsoleTransport();
+        return new ConsoleTransport({ stderr: t.stderr ?? logToStderr });
       case "otlp":
         return new OTLPTransport({
           endpoint: t.endpoint,

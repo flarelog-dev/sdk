@@ -202,6 +202,39 @@ export function ErrorBoundaryWrapper({ children }: { children: React.ReactNode }
 
 See [Browser Guide](/guides/browser) for `useFlareLog`, `useFlareLogPageView`, and global error capture.
 
+## Capture every server error with `onRequestError`
+
+In production, Next.js hides the real error from the browser and shows:
+
+> Application error: a server-side exception has occurred (see the server logs for more information). Digest: 1389973523
+
+The digest is a hash. The real message and stack trace only exist in your server logs, next to that same digest. `createOnRequestError` sends every uncaught server error to FlareLog **with its digest**, so you can paste the digest from the error page into FlareLog and land on the failure.
+
+```typescript
+// instrumentation.ts (project root, or src/ if you use it)
+import { flarelog } from "@flarelog/sdk";
+import { createOnRequestError } from "@flarelog/sdk/next";
+
+const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+
+export const onRequestError = createOnRequestError(logger);
+```
+
+Each error is logged at `ERROR` level with:
+
+| Attribute | Value |
+| --- | --- |
+| `next.digest` | The digest shown on the error page |
+| `next.route` / `next.route_type` | The matched route and whether it was a render, route handler, action or middleware |
+| `next.router_kind` | `App Router` or `Pages Router` |
+| `next.render_source` | Where in the render pipeline it failed, when Next.js reports it |
+| `http.method` / `http.path` | The request, **without its query string** |
+| `error.stack` | The stack trace |
+
+Request headers and cookies are never sent. The hook flushes before returning, because a serverless invocation can be frozen as soon as it ends, and it never throws into Next.js's error path.
+
+It runs inside the Next.js server, so it works the same on Vercel, Docker, a VPS or any other host. It needs a Next.js version that supports `onRequestError` (15 and later).
+
 ## TypeScript
 
 `@flarelog/sdk/next` does not import `next` at runtime, so it stays zero-dependency even after the optional peer dependency. If you want full framework types in your handler signature, import them from `next` as usual:

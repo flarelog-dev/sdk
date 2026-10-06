@@ -75,13 +75,20 @@ function formatSpan(span: ReadableSpan): string {
 export class ConsoleTransport implements Transport {
   readonly name = "console";
 
+  /**
+   * @param opts.stderr Write everything to stderr, never stdout. Required for
+   *   stdio MCP servers (and any CLI whose stdout is a machine-readable
+   *   protocol): a stray line on stdout corrupts the stream the client parses.
+   */
+  constructor(private readonly opts: { stderr?: boolean } = {}) {}
+
   async exportLogs(logs: ReadableLogRecord[]): Promise<void> {
     for (const log of logs) {
       const line = formatLog(log);
       const level = log.severityText ?? "INFO";
       // route fatal/error/warn to console.error, others to console.log
       runWithHookSkipped(() => {
-        if (level === "FATAL" || level === "ERROR" || level === "WARN") {
+        if (this.opts.stderr || level === "FATAL" || level === "ERROR" || level === "WARN") {
           // eslint-disable-next-line no-console
           console.error(line);
         } else {
@@ -95,8 +102,11 @@ export class ConsoleTransport implements Transport {
   async exportSpans(spans: ReadableSpan[]): Promise<void> {
     for (const span of spans) {
       runWithHookSkipped(() => {
+        const line = formatSpan(span);
         // eslint-disable-next-line no-console
-        console.log(formatSpan(span));
+        if (this.opts.stderr) console.error(line);
+        // eslint-disable-next-line no-console
+        else console.log(line);
       });
     }
   }

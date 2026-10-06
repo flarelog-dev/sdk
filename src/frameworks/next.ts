@@ -317,3 +317,89 @@ export function withNextMiddleware(
 
   return createWebFallbackHandler(logger, handler, "nextjs:middleware");
 }
+
+// ---------------------------------------------------------------------------
+// instrumentation.ts — onRequestError
+// ---------------------------------------------------------------------------
+
+/**
+ * The `request` argument Next.js passes to `onRequestError`.
+ * Inlined so `@flarelog/sdk/next` stays free of a hard `next` dependency.
+ */
+export interface NextRequestErrorRequest {
+  path: string;
+  method: string;
+  headers: Record<string, string | string[] | undefined>;
+}
+
+/** The `context` argument Next.js passes to `onRequestError`. */
+export interface NextRequestErrorContext {
+  routerKind: "Pages Router" | "App Router";
+  routePath: string;
+  routeType: "render" | "route" | "action" | "middleware";
+  renderSource?:
+    | "react-server-components"
+    | "react-server-components-payload"
+    | "server-rendering";
+  revalidateReason?: "on-demand" | "stale" | undefined;
+  renderType?: "dynamic" | "dynamic-resume";
+}
+
+/**
+ * Build an `onRequestError` hook for Next.js's `instrumentation.ts` that sends
+ * every uncaught server-side error to FlareLog.
+ *
+ * In production Next.js hides the real error from the browser and shows
+ * "Application error: a server-side exception has occurred" with a `Digest`.
+ * The digest is a hash that appears next to the real stack trace in the server
+ * logs; this hook records the digest together with the error, so you can paste
+ * the digest from the error page into FlareLog and land on the exact failure.
+ *
+ * Works on any host (Vercel, Docker, a VPS, ...), because it runs inside the
+ * Next.js server rather than depending on the platform's log viewer.
+ *
+ * @example
+ * ```ts
+ * // instrumentation.ts
+ * import { flarelog } from "@flarelog/sdk";
+ * import { createOnRequestError } from "@flarelog/sdk/next";
+ *
+ * const logger = flarelog({ apiKey: process.env.FLARELOG_API_KEY });
+ * export const onRequestError = createOnRequestError(logger);
+ * ```
+ */
+export function createOnRequestError(
+  logger: Pick<FlareLogLike, "error"> & { flush?: () => Promise<void> }
+): (
+  error: unknown,
+  request: NextRequestErrorRequest,
+  context: NextRequestErrorContext
+) => Promise<void> {
+  return async (error, request, context) => {
+    try {
+      const err = error instanceof Error ? error : new Error(String(error));
+      const digest = (error as { digest?: unknown } | null)?.digest;
+
+      // Path only: query strings routinely carry tokens and other secrets.
+      const path = (request?.path ?? "").split("?")[0];
+
+      logger.error(err.message || err.name, {
+        "next.digest": typeof digest === "string" ? digest : undefined,
+        "next.route": context?.routePath,
+        "next.route_type": context?.routeType,
+        "next.router_kind": context?.routerKind,
+        "next.render_source": context?.renderSource,
+        "http.method": request?.method,
+        "http.path": path,
+        "error.type": err.name,
+        "error.stack": err.stack,
+        "next.hook": "onRequestError",
+      });
+
+      // The invocation may be frozen as soon as this hook returns.
+      await logger.flush?.();
+    } catch {
+      // Never let telemetry throw inside Next.js's error path.
+    }
+  };
+}

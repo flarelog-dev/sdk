@@ -108,6 +108,20 @@ export interface FlareLogConfig {
    */
   warnOnConsoleFallback?: boolean;
 
+  /**
+   * Send the SDK's own console output (the console transport used when no
+   * backend is configured, and the console transport in `transports`) to
+   * stderr only.
+   *
+   * Set this in **stdio MCP servers**, where stdout carries the protocol: any
+   * extra line on stdout makes the client fail to parse the stream. Has no
+   * effect on logs shipped to FlareLog or an OTLP backend, which never touch
+   * stdout.
+   *
+   * Defaults to `false`.
+   */
+  logToStderr?: boolean;
+
   /** Default source tag for all logs */
   defaultSource?: string;
 
@@ -237,7 +251,7 @@ export interface FlareLogConfig {
  * Transport configuration — used in the `transports` array.
  */
 export type TransportConfig =
-  | { type: "console" }
+  | { type: "console"; stderr?: boolean }
   | {
       type: "otlp";
       endpoint?: string;

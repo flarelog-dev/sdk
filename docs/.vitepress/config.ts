@@ -80,6 +80,8 @@ export default defineConfig({
             { text: 'Node.js', link: '/guides/nodejs' },
             { text: 'Browser', link: '/guides/browser' },
             { text: 'Advanced Features', link: '/guides/advanced' },
+            { text: 'Other Runtimes', link: '/guides/runtimes' },
+            { text: 'Logging an MCP Server', link: '/guides/mcp-servers' },
             { text: 'Migration Guide (v1 to v2)', link: '/guides/migration' },
           ]
         }
