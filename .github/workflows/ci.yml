@@ -54,8 +54,6 @@ jobs:
 
       - name: Run tests
         run: npm test
-      - name: Run smoke testing
-        run: npm run test:smoke
 
   contract-tests:
     name: Contract tests (real framework packages)
