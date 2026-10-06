@@ -21,6 +21,7 @@ export { ConsoleTransport } from "./otel/console-transport";
 export { OTLPTransport } from "./otel/otlp-transport";
 export { FlarelogTransport } from "./otel/flarelog-transport";
 export type { Transport, TransportCapabilities } from "./otel/transport";
+export { PermanentExportError, isPermanentExportError } from "./otel/transport";
 export { buildResource } from "./otel/resource";
 export { initProviders } from "./otel/providers";
 export {

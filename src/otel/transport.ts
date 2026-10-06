@@ -37,3 +37,23 @@ export interface TransportCapabilities {
   logs: boolean;
   traces: boolean;
 }
+
+/**
+ * Thrown by a transport when a failure cannot be fixed by sending the same
+ * batch again — a rejected API key, an exhausted quota, a batch the server
+ * refuses on size. Batch processors drop such a batch (and report it through
+ * `onDrop`) instead of putting it back in the queue, where it would be retried
+ * on every flush for as long as the process lives.
+ */
+export class PermanentExportError extends Error {
+  readonly permanent = true;
+
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = "PermanentExportError";
+  }
+}
+
+export function isPermanentExportError(err: unknown): err is PermanentExportError {
+  return typeof err === "object" && err !== null && (err as { permanent?: unknown }).permanent === true;
+}

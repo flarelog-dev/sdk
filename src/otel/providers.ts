@@ -2,7 +2,7 @@ import type { Resource, ReadableSpan, ReadableLogRecord, TracerProvider, LoggerP
 import { ensureContextManager, getSpanContext } from "./context";
 import { activeContext } from "./context";
 import { SimpleTracerProvider } from "./span";
-import type { Transport } from "./transport";
+import { isPermanentExportError, type Transport } from "./transport";
 import { runWithHookSkipped } from "../console";
 
 export interface ProviderOptions {
@@ -122,6 +122,14 @@ class BatchSpanProcessor {
         await this.exporter.export(batch);
         this.retryCount = 0; // Reset on success
       } catch (err) {
+        // The backend refused this batch for good (bad key, quota, too large).
+        // Re-queueing it would just replay the same refusal on every flush.
+        if (isPermanentExportError(err)) {
+          this.retryCount = 0;
+          this.onDrop(batch.length);
+          return;
+        }
+
         // Put failed batch back at the front of the queue
         this.queue.unshift(...batch);
         this.retryCount++;
@@ -243,6 +251,13 @@ class BatchLogProcessor {
         await this.exporter.export(batch);
         this.retryCount = 0; // Reset on success
       } catch (err) {
+        // See BatchSpanProcessor.flush(): a permanent refusal is dropped, not replayed.
+        if (isPermanentExportError(err)) {
+          this.retryCount = 0;
+          this.onDrop(batch.length);
+          return;
+        }
+
         // Put failed batch back at the front of the queue
         this.queue.unshift(...batch);
         this.retryCount++;
