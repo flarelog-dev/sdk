@@ -12,8 +12,8 @@
  *   npm run update-prices
  */
 
-import { writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { existsSync, writeFileSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const CATALOG_URL = "https://models.opencode.ai/catalog.json";
@@ -121,6 +121,51 @@ const LEGACY_MODELS: Record<string, NonNullable<CatalogModel["cost"]>> = {
   "claude-3-haiku": { input: 0.25, output: 1.25, cache_read: 0.03, cache_write: 0.3 },
 };
 
+interface PreviousEntry {
+  input: number;
+  output: number;
+  cachedInput?: number;
+  cacheCreationInput?: number;
+  contextWindow?: number;
+  maxOutput?: number;
+  hasReasoning?: boolean;
+  hasToolCall?: boolean;
+  hasAttachment?: boolean;
+  inputModalities?: string[];
+  outputModalities?: string[];
+}
+
+/**
+ * The table and host map from the current `cost-table.ts`, if there is one.
+ *
+ * The catalog drops a model once no provider sells it any more, but apps keep
+ * calling retired ids for months. Carrying previous entries over means a
+ * refresh only ever adds or re-prices models; it never makes a model that used
+ * to be priced fall through to PROVIDER_FALLBACK.
+ */
+async function loadPrevious(
+  path: string
+): Promise<{ table: Record<string, PreviousEntry>; hosts: Record<string, string> }> {
+  if (!existsSync(path)) return { table: {}, hosts: {} };
+  const mod = (await import(pathToFileURL(path).href)) as {
+    PRICE_TABLE?: Record<string, PreviousEntry>;
+    PROVIDER_HOSTS?: Record<string, string>;
+  };
+  return { table: mod.PRICE_TABLE ?? {}, hosts: mod.PROVIDER_HOSTS ?? {} };
+}
+
+function fromPrevious(e: PreviousEntry): CatalogModel {
+  return {
+    cost: { input: e.input, output: e.output, cache_read: e.cachedInput, cache_write: e.cacheCreationInput },
+    limit: e.contextWindow || e.maxOutput ? { context: e.contextWindow, output: e.maxOutput } : undefined,
+    reasoning: e.hasReasoning,
+    tool_call: e.hasToolCall,
+    attachment: e.hasAttachment,
+    modalities:
+      e.inputModalities || e.outputModalities ? { input: e.inputModalities, output: e.outputModalities } : undefined,
+  };
+}
+
 async function fetchCatalog(): Promise<Catalog> {
   const res = await fetch(CATALOG_URL, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`Failed to fetch catalog: HTTP ${res.status}`);
@@ -185,6 +230,16 @@ async function main() {
     table.set(key, { cost });
   }
 
+  // Models priced in the previous table but gone from the catalog: keep them.
+  const outPath = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "ai", "cost-table.ts");
+  const previous = await loadPrevious(outPath);
+  let carried = 0;
+  for (const [key, entry] of Object.entries(previous.table)) {
+    if (table.has(key)) continue;
+    table.set(key, fromPrevious(entry));
+    carried++;
+  }
+
   const keys = [...table.keys()].sort((a, b) => a.localeCompare(b));
   const body = keys.map((key) => `  ${JSON.stringify(key)}: ${priceEntry(table.get(key)!)},`).join("\n");
 
@@ -202,6 +257,10 @@ async function main() {
     if (hostMap.size > 0 && [...hostMap.values()].includes(providerId)) continue;
     const host = provider.api ? extractHost(provider.api) : HARDCODED_HOSTS[providerId];
     if (host && !hostMap.has(host)) hostMap.set(host, providerId);
+  }
+  // Same as models: a provider dropped from the catalog keeps its host mapping.
+  for (const [host, providerId] of Object.entries(previous.hosts)) {
+    if (!hostMap.has(host)) hostMap.set(host, providerId);
   }
 
   const hostEntries = [...hostMap.entries()]
@@ -307,9 +366,10 @@ export function lookupPrice(
 }
 `;
 
-  const outPath = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "ai", "cost-table.ts");
   writeFileSync(outPath, FILE, "utf8");
-  console.log(`[update-prices] wrote ${outPath} (${keys.length} models, ${hostMap.size} provider hosts)`);
+  console.log(
+    `[update-prices] wrote ${outPath} (${keys.length} models, ${carried} kept from the previous table, ${hostMap.size} provider hosts)`
+  );
 }
 
 main().catch((err) => {
