@@ -4,6 +4,7 @@ import { flarelog } from "../src/factory";
 import { ConsoleTransport } from "../src/otel/console-transport";
 import { OTLPTransport } from "../src/otel/otlp-transport";
 import { FlarelogTransport } from "../src/otel/flarelog-transport";
+import pkg from "../package.json";
 import {
   extractOtlpLogs,
   extractOtlpSpans,
@@ -132,6 +133,7 @@ describe("OTel transport system", () => {
       const resourceAttrs = attrsToObject(body.resourceLogs[0].resource.attributes);
       expect(resourceAttrs["service.name"]).toBe("my-worker");
       expect(resourceAttrs["telemetry.sdk.name"]).toBe("flarelog");
+      expect(resourceAttrs["telemetry.sdk.version"]).toBe(pkg.version);
       expect(resourceAttrs["deployment.environment.name"]).toBe("production");
       logger.destroy();
     });

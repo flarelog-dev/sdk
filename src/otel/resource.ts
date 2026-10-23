@@ -1,7 +1,10 @@
 import type { Resource } from "./types";
 import { detectRuntime, detectServiceName } from "./env";
 
-const SDK_VERSION = "2.0.0";
+// Replaced with the version from package.json at build time, see the `define`
+// in tsup.config.ts (and vitest.config.ts for tests).
+declare const __FLARELOG_SDK_VERSION__: string;
+const SDK_VERSION = __FLARELOG_SDK_VERSION__;
 
 const ATTR_SERVICE_NAME = "service.name";
 const ATTR_SERVICE_VERSION = "service.version";

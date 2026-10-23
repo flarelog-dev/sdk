@@ -1,4 +1,7 @@
 import { defineConfig } from 'tsup';
+import { readFileSync } from 'node:fs';
+
+const { version } = JSON.parse(readFileSync('./package.json', 'utf8')) as { version: string };
 
 export default defineConfig({
   entry: [
@@ -17,4 +20,6 @@ export default defineConfig({
   clean: true,
   splitting: true,
   sourcemap: true,
+  // Reported as telemetry.sdk.version on every batch.
+  define: { __FLARELOG_SDK_VERSION__: JSON.stringify(version) },
 });

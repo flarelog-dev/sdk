@@ -1,4 +1,7 @@
 import { defineConfig } from "vitest/config";
+import { readFileSync } from "node:fs";
+
+const { version } = JSON.parse(readFileSync("./package.json", "utf8")) as { version: string };
 
 /**
  * Vitest configuration.
@@ -16,6 +19,7 @@ import { defineConfig } from "vitest/config";
  * handles gracefully.
  */
 export default defineConfig({
+  define: { __FLARELOG_SDK_VERSION__: JSON.stringify(version) },
   test: {
     globals: false,
     deps: {
