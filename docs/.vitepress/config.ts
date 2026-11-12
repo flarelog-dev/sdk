@@ -93,6 +93,7 @@ export default defineConfig({
             { text: 'Cloudflare Workers', link: '/platforms/cloudflare-workers' },
             { text: 'Vercel', link: '/platforms/vercel' },
             { text: 'Lovable', link: '/platforms/lovable' },
+            { text: 'Supabase', link: '/platforms/supabase' },
           ]
         }
       ],
