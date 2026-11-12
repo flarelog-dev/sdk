@@ -4,6 +4,59 @@ Zero-config observability for Cloudflare Workers — including Workers Sites, Du
 
 > **Using Hono or TanStack Start on Workers?** Use the [Hono](/frameworks/hono) or [TanStack Start](/frameworks/tanstack-start) framework integration instead — they handle the `env` binding automatically. This guide is for raw Workers handlers.
 
+## No code: Cloudflare OpenTelemetry export {#cloudflare-export}
+
+Cloudflare can [export Workers Logs over OpenTelemetry](https://developers.cloudflare.com/workers/observability/opentelemetry-export/) to FlareLog, with no SDK and no code change. Console output and uncaught exceptions arrive as FlareLog issues.
+
+### One click
+
+1. In your FlareLog project, open **Settings → Connect → Cloudflare**.
+2. Select **Connect Cloudflare** and approve access on Cloudflare's consent screen.
+3. Pick your Workers.
+
+FlareLog creates a logs destination in your Cloudflare account and adds it to each Worker's log export. Other destinations are kept, and whether Cloudflare also stores its own copy of the logs doesn't change. FlareLog revokes its Cloudflare access when it's done.
+
+### By hand
+
+1. In the Cloudflare dashboard, go to **Observability → Destinations** and select **Add destination**.
+2. Set **Destination type** to **Logs** and use this OTLP endpoint:
+
+   ```
+   https://flarelog.dev/api/v1/drains/cloudflare
+   ```
+
+3. Add a custom header `Authorization` with the value `Bearer <your FlareLog API key>`. Create an ingest key in your project's **Settings → API keys**.
+4. Add the destination's name to each Worker's Wrangler configuration and redeploy:
+
+   ```jsonc
+   // wrangler.jsonc
+   {
+     "observability": {
+       "logs": {
+         "enabled": true,
+         "destinations": ["flarelog"]
+       }
+     }
+   }
+   ```
+
+   ```toml
+   # wrangler.toml
+   [observability.logs]
+   enabled = true
+   destinations = [ "flarelog" ]
+   ```
+
+Replace `flarelog` with your destination's name. If you connected with one click, keep these lines in your Wrangler config too: `wrangler deploy` sends the config's observability settings, which can remove the export. Add `persist = false` if you don't want Cloudflare to keep its own copy.
+
+### What FlareLog keeps
+
+- Console output and other log lines.
+- Uncaught exceptions, with the stack, grouped into issues.
+- Failed invocations (exceeded CPU or memory, 5xx responses) as errors.
+
+The invocation log Cloudflare writes for every successful request is skipped, so it doesn't count toward your plan. Visitor IP addresses, locations, request headers and TLS details are not stored. Traces export isn't supported yet; use the SDK for traces and AI call tracking.
+
 ## Quick Start (3 lines)
 
 ```typescript
