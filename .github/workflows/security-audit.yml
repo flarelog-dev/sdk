@@ -27,7 +27,7 @@ jobs:
         run: npm ci
 
       - name: Run npm audit
-        run: npm audit --audit-level=moderate
+        run: npx --yes audit-ci@7.1.0 --config audit-ci.jsonc
 
   scan-dependencies:
     name: Scan for known vulnerabilities

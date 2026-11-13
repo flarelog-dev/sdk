@@ -1,0 +1,13 @@
+{
+  "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
+  // Fail on any moderate or higher advisory, except those listed below.
+  "moderate": true,
+  "allowlist": [
+    // minimatch: denial of service via globparts amplification. Only typedoc
+    // (dev-only, used to build the API docs) still pulls an affected minimatch:
+    // the fixed minimatch 11 made Minimatch.matchOne private, which typedoc
+    // 0.28 calls. The bug needs attacker-written glob patterns, and typedoc
+    // only reads our own config. Remove this once typedoc supports minimatch 11.
+    "GHSA-g3hv-75wg-m249|typedoc-plugin-markdown>typedoc>minimatch"
+  ]
+}
