@@ -37,9 +37,11 @@ FlareLog creates an API key and adds a log drain named `FlareLog` to each projec
 
 Skipped logs don't count toward your plan. FlareLog doesn't store the visitor IP addresses, locations, request headers, user agents, JWT details or email addresses that Supabase includes.
 
-## Stopping
+## Disconnecting {#disconnect}
 
-Remove the `FlareLog` drain under **Project Settings → Log Drains** in Supabase. Supabase stops sending logs and stops billing the drain.
+In your FlareLog project, open **Settings → Connect → Supabase** and select **Disconnect Supabase**. You sign in to Supabase again, pick the organization, and choose which projects to disconnect. FlareLog deletes their `FlareLog` drain, so Supabase stops sending logs and stops billing the drain. Once no drain in the organization uses it, FlareLog deletes its API key, then revokes its Supabase access. Logs FlareLog already has are kept.
+
+To do it by hand, remove the `FlareLog` drain under **Project Settings → Log Drains** in Supabase, then delete the key in your FlareLog project's **Settings → API keys**.
 
 ## Using the SDK too
 
