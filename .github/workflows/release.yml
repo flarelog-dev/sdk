@@ -9,7 +9,11 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  # Create the GitHub release for the tag.
+  contents: write
+  # Let npm publish --provenance get a signed GitHub identity token, so the
+  # package shows it was built by this workflow from this repo.
+  id-token: write
 
 jobs:
   publish:
@@ -46,6 +50,17 @@ jobs:
             echo "::error::$PKG_VERSION is already on npm. Bump the version or unpublish first."
             exit 1
           fi
+
+      # Without this, a missing token only shows up as ENEEDAUTH at the very
+      # end, after the full test suite.
+      - name: Check the npm token is set
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::The NPM_TOKEN secret is missing. Add an npm automation token under Settings > Environments > npm > Environment secrets."
+            exit 1
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install dependencies
         run: npm ci
