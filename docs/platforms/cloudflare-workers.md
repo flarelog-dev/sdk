@@ -57,6 +57,17 @@ Replace `flarelog` with your destination's name. If you connected with one click
 
 The invocation log Cloudflare writes for every successful request is skipped, so it doesn't count toward your plan. Visitor IP addresses, locations, request headers and TLS details are not stored. Traces export isn't supported yet; use the SDK for traces and AI call tracking.
 
+### Disconnecting
+
+In your FlareLog project, open **Settings → Connect → Cloudflare** and select **Disconnect Cloudflare**. You sign in to Cloudflare again, and FlareLog shows what it will remove before changing anything:
+
+- FlareLog's destination is taken off each Worker that exports to it. Other destinations and settings are kept, and Workers whose logs were on only for FlareLog get them turned off again.
+- The destination and its FlareLog API key are deleted, and FlareLog revokes its Cloudflare access.
+
+If you added the destination to a Worker's Wrangler config, remove it there too before your next deploy. Logs FlareLog already has are kept.
+
+To do it by hand, remove the destination from your Workers and delete it under **Observability → Destinations**, then delete the key in your FlareLog project's **Settings → API keys**.
+
 ## Quick Start (3 lines)
 
 ```typescript
